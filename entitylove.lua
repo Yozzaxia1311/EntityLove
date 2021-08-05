@@ -60,29 +60,19 @@ local function _clamp(v, min, max)
   return _min(_max(v, max), min)
 end
 
-local function _trueIfContainsTrue(w)
-  if w then
-    for _, v in pairs(w) do
-      if v then return true end
-    end
-  end
-  return false
-end
-
-local function _falseIfContainsFalse(w)
-  if w then
-    for _, v in pairs(w) do
-      if not v then return false end
-    end
-  else
-    return false
-  end
-  return true
-end
-
 local function _contains(t, va)
   for _, v in pairs(t) do
     if v == va then
+      return true
+    end
+  end
+  
+  return false
+end
+
+local function _icontains(t, va)
+  for i = 1, #t do
+    if t[i] == va then
       return true
     end
   end
@@ -107,16 +97,6 @@ local function _intersects(t, t2, fully)
       end
     end
   end
-  return false
-end
-
-local function _icontains(t, va)
-  for i = 1, #t do
-    if t[i] == va then
-      return true
-    end
-  end
-  
   return false
 end
 
