@@ -1,47 +1,11 @@
--- Basic class implementation. [Referenced from Classic](https://github.com/rxi/classic)
+-- Constants.
 
-local class = {}
-class.__class = class
+local entitySystem = {}
 
-function class:init() end
-
-function class:extend()
-  local c = {}
-  
-  for k, v in pairs(self) do
-    if k:find("__") == 1 then
-      c[k] = v
-    end
-  end
-  
-  c.__class = c
-  c.super = self
-  setmetatable(c, self)
-  
-  return c
-end
-
-function class:is(typ)
-  local mt = getmetatable(self)
-  
-  while mt do
-    if mt == typ then
-      return true
-    end
-    
-    mt = getmetatable(mt)
-  end
-  
-  return false
-end
-
-function class:__call(...)
-  local inst = setmetatable({}, self)
-  
-  inst:init(...)
-  
-  return inst
-end
+entitySystem.HASH_SIZE = 96
+entitySystem.COL_RECT = 1
+entitySystem.COL_IMAGE = 2
+entitySystem.COL_CIRCLE = 3
 
 -- Important util functions.
 
@@ -50,7 +14,7 @@ local _ceil = math.ceil
 local _sqrt = math.sqrt
 local _min = math.min
 local _max = math.max
-local _remove = _remove
+local _remove = table.remove
 
 local function _dist2d(x, y, x2, y2)
   return _sqrt(((x - x2) ^ 2) + ((y - y2) ^ 2))
@@ -124,14 +88,10 @@ local function _quickRemoveValueArray(t, va)
   end
 end
 
--- Constants.
-
-local entitySystem = class:extend()
-
-entitySystem.HASH_SIZE = 96
-entitySystem.COL_RECT = 1
-entitySystem.COL_IMAGE = 2
-entitySystem.COL_CIRCLE = 3
+local function _sanityCheck(e)
+  assert(type(e) == "table", "Provided value is not a table.")
+  assert(e._entitySystemConformed, "Table is not conformed to be an entity! Use entitySystem:conform(e).")
+end
 
 -- Collision.
 
@@ -280,15 +240,27 @@ function entitySystem:init()
   self.addQueue = {}
   self.removeQueue = {}
   self.readyQueue = {}
-  self.recycle = {}
   self.hashes = {}
   self._HS =  {}
   self.doSort = false
   self.inLoop = false
   self.drawCollision = false
+  self._imgCache = {}
+end
+
+function entitySystem:_getLayerData(l)
+  for i=1, #self.layers do
+    local v = self.layers[i]
+    
+    if v._layer == l then
+      return v
+    end
+  end
 end
 
 function entitySystem:updateHashForEntity(e)
+  _sanityCheck(e)
+  
   if e.collisionShape and not e.invisibleToHash then
     if not e.currentHashes then
       e.currentHashes = {}
@@ -370,7 +342,7 @@ function entitySystem:updateHashForEntity(e)
   end
 end
 
-function entitySystem:getSurroundingEntities(xx, yy, ww, hh)
+function entitySystem:getEntitiesAt(xx, yy, ww, hh)
   local result
   local hs = entitySystem.HASH_SIZE
   
@@ -395,33 +367,37 @@ function entitySystem:getSurroundingEntities(xx, yy, ww, hh)
   return result or {}
 end
 
-function entitySystem:emptyRecycling(c, num)
-  if not num or num < 1 then
-    self.recycling[c] = {}
-  elseif num < self.recycling[c] then
-    for i=num, #self.recycling[c] do
-      self.recycling[c][i] = nil
-    end
-  end
+function entitySystem:collision(e, other, x, y, notme)
+  _sanityCheck(e)
+  
+  return e and other and (not notme or other ~= e) and e.collisionShape and other.collisionShape and
+    _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
 end
 
-function entitySystem:getRecycled(c, ...)
-  if not c then error("Class does not exist.") end
+function entitySystem:collisionTable(e, table, x, y, notme, func)
+  _sanityCheck(e)
   
-  local e
-  local vr = self.recycle[c]
-  
-  if vr and #vr > 0 then
-    e = vr[#vr]
-    e.recycling = true
-    e:init(...)
-    e.recycling = false
-    vr[#vr] = nil
+  local result = {}
+  if not table then return result end
+  for i=1, #table do
+    if self:collision(e, table[i], x, y, notme) and (func == nil or func(v)) then
+      result[#result+1] = table[i]
+    end
   end
+  return result
+end
+
+function entitySystem:collisionNumber(e, table, x, y, notme, func)
+  _sanityCheck(e)
   
-  if not e then e = c(...) end
-  
-  return e
+  local result = 0
+  if not table then return result end
+  for i=1, #table do
+    if self:collision(e, table[i], x, y, notme) and (func == nil or func(t[i])) then
+      result = result + 1
+    end
+  end
+  return result
 end
 
 function entitySystem:sortLayers()
@@ -429,8 +405,8 @@ function entitySystem:sortLayers()
   local vals = {}
   
   for k, v in pairs(self.layers) do
-    keys[#keys + 1] = v._layer
-    vals[v._layer] = v
+    keys[#keys + 1] = v.layer
+    vals[v.layer] = v
     self.layers[k] = nil
   end
   
@@ -441,25 +417,15 @@ function entitySystem:sortLayers()
   end
 end
 
-function entitySystem:getLayer(l)
-  for i=1, #self.layers do
-    local v = self.layers[i]
-    
-    if v._layer == l then
-      return v
-    end
-  end
-end
-
-function entitySystem:add(c, ...)
-  local e = self:getRecycled(c, ...)
+function entitySystem:add(e)
+  _sanityCheck(e)
   
   if not e.static then
     local done = false
     
     for i=1, #self.layers do
       local v = self.layers[i]
-      if v._layer == e._layer then
+      if v.layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
         break
@@ -478,10 +444,6 @@ function entitySystem:add(c, ...)
   
   self.all[#self.all+1] = e
   
-  for i = 1, #e.groupNames do
-    self:addToGroup(e, e.groupNames[i])
-  end
-  
   e.isRemoved = false
   e.isAdded = true
   e.justAddedIn = true
@@ -491,11 +453,11 @@ function entitySystem:add(c, ...)
   e.lastHashY2 = nil
   e.system = self
   e.currentHashes = nil
-  if not e.invisibleToHash then e:updateHash(true) end
-  e:added()
+  if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e, true) end
+  if e.added then e:added() end
   
   if self.inLoop then
-    e:ready()
+    if e.ready then e:ready() end
   else
     self.readyQueue[#self.readyQueue + 1] = e
   end
@@ -510,95 +472,28 @@ function entitySystem:add(c, ...)
   return e
 end
 
-function entitySystem:addExisting(e)
-  if e.isAdded then return e end
-  if not e then return end
+function entitySystem:queueAdd(e)
+  _sanityCheck(e)
   
-  if not e.static then
-    local done = false
-    
-    for i=1, #self.layers do
-      local v = self.layers[i]
-      if v._layer == e._layer then
-        v.data[#v.data + 1] = e
-        done = true
-        break
-      end
-    end
-    
-    if not done then
-      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
-      self.doSort = true
-    end
-    
-    self.updates[#self.updates + 1] = e
-  else
-    self.static[#self.static + 1] = e
-  end
-  
-  self.all[#self.all+1] = e
-  
-  for i = 1, #e.groupNames do
-    self:addToGroup(e, e.groupNames[i])
-  end
-  
-  e.isRemoved = false
-  e.isAdded = true
-  e.justAddedIn = true
-  e.lastHashX = nil
-  e.lastHashY = nil
-  e.lastHashX2 = nil
-  e.lastHashY2 = nil
-  e.system = self
-  e.currentHashes = nil
-  if not e.invisibleToHash then e:updateHash(true) end
-  e:added()
-  
-  if self.inLoop then
-    e:ready()
-  else
-    self.readyQueue[#self.readyQueue + 1] = e
-  end
-  
-  e.previousX = e.x
-  e.previousY = e.y
-  
-  if e.calcGrav then
-    e:calcGrav()
-  end
-  
-  return e
-end
-
-function entitySystem:queueAdd(c, ...)
-  if not c then return end
-  self.addQueue[#self.addQueue + 1] = self:getRecycled(c, ...)
-  return self.addQueue[#self.addQueue]
-end
-
-function entitySystem:queueAddExisting(e)
-  if not e or not e.isRemoved or e.isAdded or _icontains(self.addQueue, e) then return end
   self.addQueue[#self.addQueue + 1] = e
   return self.addQueue[#self.addQueue]
 end
 
 function entitySystem:addToGroup(e, g)
+  _sanityCheck(e)
+  
   if not self.groups[g] then
     self.groups[g] = {}
   end
-  
   if not _icontains(self.groups[g], e) then
     self.groups[g][#self.groups[g] + 1] = e
-  end
-  
-  if not _icontains(e.groupNames, g) then
-    e.groupNames[#e.groupNames + 1] = g
   end
 end
 
 function entitySystem:removeFromGroup(e, g)
+  _sanityCheck(e)
+  
   _quickRemoveValueArray(self.groups[g], e)
-  _quickRemoveValueArray(e.groupNames, g)
   
   if #self.groups[g] == 0 then
     self.groups[g] = nil
@@ -606,16 +501,20 @@ function entitySystem:removeFromGroup(e, g)
 end
 
 function entitySystem:removeFromAllGroups(e)
+  _sanityCheck(e)
+  
   for k, _ in pairs(self.groups) do
     self:removeFromGroup(e, k)
   end
 end
 
 function entitySystem:makeStatic(e)
+  _sanityCheck(e)
+  
   if not e.static then
     _quickRemoveValueArray(self.updates, e)
     
-    local al = self:getLayer(e._layer)
+    local al = self:_getLayerData(e._layer)
     
     _quickRemoveValueArray(al.data, e)
     
@@ -639,11 +538,13 @@ function entitySystem:makeStatic(e)
     e.lastHashY2 = nil
     e.currentHashes = nil
     
-    e:staticToggled()
+    if e.staticToggled then e:staticToggled() end
   end
 end
 
 function entitySystem:revertFromStatic(e)
+  _sanityCheck(e)
+  
   if e.static then
     _quickRemoveValueArray(self.static, e)
     
@@ -651,7 +552,7 @@ function entitySystem:revertFromStatic(e)
     
     for i=1, #self.layers do
       local v = self.layers[i]
-      if v._layer == e._layer then
+      if v.layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
         break
@@ -723,19 +624,21 @@ function entitySystem:revertFromStatic(e)
     e.currentHashes = nil
     
     if not e.invisibleToHash then
-      e:updateHash()
+      self:updateEntityHashWhenNeeded(e)
     end
     
-    e:staticToggled()
+    if e.staticToggled then e:staticToggled() end
   end
 end
 
 function entitySystem:setLayer(e, l)
+  _sanityCheck(e)
+  
   if e._layer ~= l then
     if not e.isAdded or e.static then
       e._layer = l
     else
-      local al = self:getLayer(e._layer)
+      local al = self:_getLayerData(e._layer)
       
       _quickRemoveValueArray(al.data, e)
       
@@ -750,7 +653,7 @@ function entitySystem:setLayer(e, l)
       for i=1, #self.layers do
         local v = self.layers[i]
         
-        if v._layer == e._layer then
+        if v.layer == e._layer then
           v.data[#v.data + 1] = e
           done = true
           break
@@ -765,14 +668,145 @@ function entitySystem:setLayer(e, l)
   end
 end
 
+function entitySystem:getLayer(e)
+  _sanityCheck(e)
+  
+  return e._layer
+end
+
+function entitySystem:inGroup(e, g)
+  _sanityCheck(e)
+  
+  return _icontains(self.groups, g)
+end
+
+function entitySystem:setRectangleCollision(e, w, h)
+  _sanityCheck(e)
+  
+  if not e.collisionShape then
+    e.collisionShape = {}
+  end
+  
+  e.collisionShape.type = entitySystem.COL_RECT
+  e.collisionShape.w = w or 1
+  e.collisionShape.h = h or 1
+  
+  e.collisionShape.r = nil
+  e.collisionShape.data = nil
+  
+  self:updateEntityHashWhenNeeded(e)
+end
+
+function entitySystem:setImageCollision(e, data)
+  _sanityCheck(e)
+  
+  if not e.collisionShape then
+    e.collisionShape = {}
+  end
+  
+  e.collisionShape.type = entitySystem.COL_IMAGE
+  e.collisionShape.w = data:getWidth()
+  e.collisionShape.h = data:getHeight()
+  e.collisionShape.data = data
+  
+  if not self._imgCache[e.collisionShape.data] then
+    self._imgCache[e.collisionShape.data] = love.graphics.newImage(e.collisionShape.data)
+  end
+  
+  e.collisionShape.image = self._imgCache[e.collisionShape.data]
+  
+  e.collisionShape.r = nil
+  
+  self:updateEntityHashWhenNeeded(e)
+end
+
+function entitySystem:setCircleCollision(e, r)
+  _sanityCheck(e)
+  
+  if not e.collisionShape then
+    e.collisionShape = {}
+  end
+  
+  e.collisionShape.type = entitySystem.COL_CIRCLE
+  e.collisionShape.w = (r or 1) * 2
+  e.collisionShape.h = (r or 1) * 2
+  e.collisionShape.r = r or 1
+  
+  e.collisionShape.data = nil
+  
+  self:updateEntityHashWhenNeeded(e)
+end
+
+function entitySystem:drawCollision(e)
+  _sanityCheck(e)
+  
+  if e.collisionShape.type == entitySystem.COL_RECT then
+    love.graphics.rectangle("line", _floor(e.x), _floor(e.y),
+      e.collisionShape.w, e.collisionShape.h)
+  elseif e.collisionShape.type == entitySystem.COL_IMAGE then
+    e.collisionShape.image:draw(_floor(e.x), _floor(e.y))
+  elseif e.collisionShape.type == entitySystem.COL_CIRCLE then
+    love.graphics.circle("line", _floor(e.x), _floor(e.y), e.collisionShape.r)
+  end
+end
+
+function entitySystem:updateEntityHashWhenNeeded(e, doAnyway)
+  _sanityCheck(e)
+  
+  if (doAnyway or e.isAdded) and e.collisionShape then
+    local xx, yy, ww, hh = e.x, e.y, e.collisionShape.w, e.collisionShape.h
+    local hs = entitySystem.HASH_SIZE
+    local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
+    local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
+    
+    if doAnyway or e.lastHashX ~= cx or e.lastHashY ~= cy or e.lastHashX2 ~= cx2 or e.lastHashY2 ~= cy2 then
+      e.lastHashX = cx
+      e.lastHashY = cy
+      e.lastHashX2 = cx2
+      e.lastHashY2 = cy2
+      
+      self:updateHashForEntity(e)
+    end
+  end
+end
+
+function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, extentsUp, extentsDown)
+  _sanityCheck(e)
+  assert(extentsLeft < 0 or extentsRight < 0 or extentsUp < 0 or extentsDown < 0, "Extents must be positive!")
+  
+  if e.invisibleToHash then
+    return {}
+  end
+  
+  if extentsLeft or extentsRight or extentsUp or extentsDown or not e.currentHashes then
+    return self:getEntitiesAt(e.x - extentsLeft, e.y + extentsUp, extentsLeft + extentsRight, extentsUp + extentsDown)
+  end
+  
+  self:updateEntityHashWhenNeeded(e)
+  
+  local result = e.currentHashes[1] and {unpack(e.currentHashes[1].data)} or {}
+  
+  for i = 2, #e.currentHashes do
+    for j = 1, #e.currentHashes[i].data do
+      if not _icontains(result, e.currentHashes[i].data[j]) then
+        result[#result + 1] = e.currentHashes[i].data[j]
+      end
+    end
+  end
+  
+  return result
+end
+
 function entitySystem:remove(e)
-  if not e or e.isRemoved then return end
+  _sanityCheck(e)
+  
+  if e.isRemoved then return end
   
   e.isRemoved = true
-  e:removed()
+  if e.removed then e:removed() end
   self:removeFromAllGroups(e)
   
-  local al = self:getLayer(e._layer)
+  local al = self:_getLayerData(e._layer)
   
   if e.static then
     _quickRemoveValueArray(self.static, e)
@@ -860,14 +894,6 @@ function entitySystem:remove(e)
   
   e.isAdded = false
   e.justAddedIn = false
-  
-  if e.recycle then
-    if not self.recycle[e.__class] then
-      self.recycle[e.__class] = {e}
-    elseif not _icontains(self.recycle[e.__class], e) then
-      self.recycle[e.__class][#self.recycle[e.__class] + 1] = e
-    end
-  end
 end
 
 function entitySystem:queueRemove(e)
@@ -876,13 +902,11 @@ function entitySystem:queueRemove(e)
 end
 
 function entitySystem:clear()
-  for _, v in ipairs(self.all) do
-    self:remove(v)
+  for _, e in ipairs(self.all) do
+    self:remove(e)
   end
   
   self.all = {}
-  section.sections = {}
-  section.current = nil
   self.layers = {}
   self.updates = {}
   self.groups = {}
@@ -900,10 +924,10 @@ end
 
 function entitySystem:draw()
   for _, layer in ipairs(self.layers) do
-    for _, v in ipairs(layer.data) do
-      if v.canDraw then
+    for _, e in ipairs(layer.data) do
+      if e.draw and e.canDraw then
         love.graphics.setColor(1, 1, 1, 1)
-        v:draw()
+        e:draw()
       end
     end
   end
@@ -911,8 +935,8 @@ function entitySystem:draw()
   if self.drawCollision then
     love.graphics.setColor(1, 1, 1, 1)
     for _, layer in ipairs(self.layers) do
-      for _, v in ipairs(layer.data) do
-        v:drawCollision()
+      for _, e in ipairs(layer.data) do
+        self:drawCollision(e)
       end
     end
   end
@@ -920,36 +944,36 @@ end
 
 function entitySystem:update(dt)
   while self.readyQueue[1] do
-    self.readyQueue[1]:ready()
+    if self.readyQueue[1].ready then self.readyQueue[1]:ready() end
     _remove(self.readyQueue, 1)
   end
   
   self.inLoop = true
   
-  for _, v in ipairs(self.updates) do
-    v.previousX = v.x
-    v.previousY = v.y
+  for _, e in ipairs(self.updates) do
+    e.previousX = e.x
+    e.previousY = e.y
     
-    if v.canUpdate then
-      v:beforeUpdate(dt)
-      if not v.invisibleToHash then v:updateHash() end
+    if e.beforeUpdate and e.canUpdate then
+      e:beforeUpdate(dt)
     end
+    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
   end
   
-  for _, v in ipairs(self.updates) do    
-    if v.canUpdate then
-      v:update(dt)
-      if not v.invisibleToHash then v:updateHash() end
+  for _, e in ipairs(self.updates) do    
+    if e.update and e.canUpdate then
+      e:update(dt)
     end
+    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
   end
   
-  for _, v in ipairs(self.updates) do
-    if v.canUpdate then
-      v:afterUpdate(dt)
-      if not v.invisibleToHash then v:updateHash() end
+  for _, e in ipairs(self.updates) do
+    if e.afterUpdate and e.canUpdate then
+      e:afterUpdate(dt)
     end
+    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
     
-    v.justAddedIn = false
+    e.justAddedIn = false
   end
   
   self.inLoop = false
@@ -970,279 +994,28 @@ function entitySystem:update(dt)
   end
 end
 
--- Base entity class.
-
-entity = class:extend()
-
-function entity:init()
-  if not self.recycling then
-    self.collisionShape = nil
-    self._layer = 1
-    self.isRemoved = true
-    self.isAdded = false
-    self.recycle = false
-  end
+-- This conforms a table to be compatible with EntityLove.
+function entitySystem:conform(t)
+  assert(type(t) == "table", "Provided value is not a table.")
   
-  self.system = nil
-  self.currentHashes = nil
-  self.groupNames = {}
-  self.x = 0
-  self.y = 0
-  self.canUpdate = true
-  self.canDraw = true
-end
-
-function entity:setLayer(l)
-  if self.system then
-    self.system:setLayer(self, l)
-  else
-    self._layer = l
+  t._layer = t._layer or 1
+  t.isRemoved = true
+  t.isAdded = false
+  t.currentHashes = nil
+  t.x = t.x or 0
+  t.y = t.y or 0
+  if t.canUpdate == nil then
+    t.canUpdate = true
   end
-end
-
-function entity:getLayer()
-  return self._layer
-end
-
-function entity:makeStatic()
-  if self.system then
-    self.system:makeStatic(self)
-  else
-    self.static = true
-    self.staticX = self.x
-    self.staticY = self.y
-    if self.collisionShape then
-      self.staticW = self.collisionShape.w
-      self.staticH = self.collisionShape.h
-    end
-    
-    self.lastHashX = nil
-    self.lastHashY = nil
-    self.lastHashX2 = nil
-    self.lastHashY2 = nil
-    self.currentHashes = nil
-    
-    self:staticToggled()
+  if t.canDraw == nil then
+    t.canDraw = true
   end
-end
-
-function entity:revertFromStatic()
-  if self.system then
-    self.system:revertFromStatic(self)
-  else
-    self.static = false
-    self.staticX = nil
-    self.staticY = nil
-    self.staticW = nil
-    self.staticH = nil
-    self.lastHashX = nil
-    self.lastHashY = nil
-    self.lastHashX2 = nil
-    self.lastHashY2 = nil
-    self.currentHashes = nil
-    
-    self:staticToggled()
-  end
-end
-
-function entity:removeFromGroup(g)
-  if self.system then
-    self.system:removeFromGroup(self, g)
-  else
-    _quickRemoveValueArray(self.groupNames, g)
-  end
-end
-
-function entity:inGroup(g)
-  return _icontains(self.groupNames, g)
-end
-
-function entity:removeFromAllGroups()
-  if self.system then
-    self.system:removeFromAllGroups(self, g)
-  else
-    self.groupNames = {}
-  end
-end
-
-function entity:addToGroup(g)
-  if self.system then
-    self.system:addToGroup(self, g)
-  elseif not _icontains(self.groupNames, g) then
-    self.groupNames[#self.groupNames + 1] = g
-  end
-end
-
-function entity:getGroup(name)
-  assert(self.system, "Entity system not found. Cannot retrieve any group.")
+  t.system = self
+  t._entitySystemConformed = true
   
-  return self.system.groups[names]
+  return t
 end
 
-function entity:setRectangleCollision(w, h)
-  if not self.collisionShape then
-    self.collisionShape = {}
-  end
-  
-  self.collisionShape.type = entitySystem.COL_RECT
-  self.collisionShape.w = w or 1
-  self.collisionShape.h = h or 1
-  
-  self.collisionShape.r = nil
-  self.collisionShape.data = nil
-  
-  self:updateHash()
-end
+entitySystem:init()
 
-entity._imgCache = {}
-
-function entity:setImageCollision(data)
-  if not self.collisionShape then
-    self.collisionShape = {}
-  end
-  
-  self.collisionShape.type = entitySystem.COL_IMAGE
-  self.collisionShape.w = data:getWidth()
-  self.collisionShape.h = data:getHeight()
-  self.collisionShape.data = data
-  
-  if not entity._imgCache[self.collisionShape.data] then
-    entity._imgCache[self.collisionShape.data] = love.graphics.newImage(self.collisionShape.data)
-  end
-  
-  self.collisionShape.image = entity._imgCache[self.collisionShape.data]
-  
-  self.collisionShape.r = nil
-  
-  self:updateHash()
-end
-
-function entity:setCircleCollision(r)
-  if not self.collisionShape then
-    self.collisionShape = {}
-  end
-  
-  self.collisionShape.type = entitySystem.COL_CIRCLE
-  self.collisionShape.w = (r or 1) * 2
-  self.collisionShape.h = (r or 1) * 2
-  self.collisionShape.r = r or 1
-  
-  self.collisionShape.data = nil
-  
-  self:updateHash()
-end
-
-function entity:collision(e, x, y, notme)
-  return e and (not notme or e ~= self) and self.collisionShape and e.collisionShape and
-    _entityCollision[self.collisionShape.type][e.collisionShape.type](self, e, x, y)
-end
-
-function entity:drawCollision()
-  if self.collisionShape.type == entitySystem.COL_RECT then
-    love.graphics.rectangle("line", _floor(self.x), _floor(self.y),
-      self.collisionShape.w, self.collisionShape.h)
-  elseif self.collisionShape.type == entitySystem.COL_IMAGE then
-    self.collisionShape.image:draw(_floor(self.x), _floor(self.y))
-  elseif self.collisionShape.type == entitySystem.COL_CIRCLE then
-    love.graphics.circle("line", _floor(self.x), _floor(self.y), self.collisionShape.r)
-  end
-end
-
-function entity:collisionTable(t, x, y, notme, func)
-  local result = {}
-  if not t then return result end
-  for i=1, #t do
-    local v = t[i]
-    if self:collision(v, x, y, notme) and (func == nil or func(v)) then
-      result[#result+1] = v
-    end
-  end
-  return result
-end
-
-function entity:collisionNumber(t, x, y, notme, func)
-  local result = 0
-  if not t then return result end
-  for i=1, #t do
-    if self:collision(t[i], x, y, notme) and (func == nil or func(t[i])) then
-      result = result + 1
-    end
-  end
-  return result
-end
-
-function entity:updateHash(doAnyway)
-  if (doAnyway or self.isAdded) and self.collisionShape then
-    local xx, yy, ww, hh = self.x, self.y, self.collisionShape.w, self.collisionShape.h
-    local hs = entitySystem.HASH_SIZE
-    local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-    local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
-    
-    if doAnyway or self.lastHashX ~= cx or self.lastHashY ~= cy or self.lastHashX2 ~= cx2 or self.lastHashY2 ~= cy2 then
-      self.lastHashX = cx
-      self.lastHashY = cy
-      self.lastHashX2 = cx2
-      self.lastHashY2 = cy2
-      
-      self.system:updateHashForEntity(self)
-    end
-  end
-end
-
-function entity:getSurroundingEntities(dxx, dyy)
-  if self.invisibleToHash then
-    return {}
-  end
-  
-  if dxx or dyy or not self.currentHashes then
-    local dx, dy = dxx or 0, dyy or 0
-    local xx, yy, ww, hh = self.x - _min(dx, 0), self.y - _min(dy, 0),
-      self.collisionShape.w + _max(dx, 0), self.collisionShape.h + _max(dy, 0)
-    
-    return self.system.getSurroundingEntities(xx, yy, ww, hh)
-  end
-  
-  self:updateHash()
-  
-  local result = self.currentHashes[1] and {unpack(self.currentHashes[1].data)} or {}
-  
-  for i = 2, #self.currentHashes do
-    for j = 1, #self.currentHashes[i].data do
-      if not _icontains(result, self.currentHashes[i].data[j]) then
-        result[#result + 1] = self.currentHashes[i].data[j]
-      end
-    end
-  end
-  
-  return result
-end
-
-function entity:remove()
-  if self.system then
-    self.system:remove(self)
-  elseif not e.isRemoved then
-    e.isRemoved = true
-    e:removed()
-    self:removeFromAllGroups()
-    
-    e.lastHashX = nil
-    e.lastHashY = nil
-    e.lastHashX2 = nil
-    e.lastHashY2 = nil
-    e.currentHashes = nil
-    
-    e.isAdded = false
-    e.justAddedIn = false
-  end
-end
-
-function entity:ready() end
-function entity:beforeUpdate(dt) end
-function entity:update(dt) end
-function entity:afterUpdate(dt) end
-function entity:draw() end
-function entity:added() end
-function entity:removed() end
-function entity:staticToggled() end
-
-return entitySystem, entity
+return entitySystem
