@@ -460,8 +460,8 @@ function entitySystem:sortLayers()
   local vals = {}
   
   for k, v in pairs(self.entities) do
-    keys[#keys + 1] = v.layer
-    vals[v.layer] = v
+    keys[#keys + 1] = v._layer
+    vals[v._layer] = v
     self.entities[k] = nil
   end
   
@@ -476,7 +476,7 @@ function entitySystem:getLayer(l)
   for i=1, #self.entities do
     local v = self.entities[i]
     
-    if v.layer == l then
+    if v._layer == l then
       return v
     end
   end
@@ -490,7 +490,7 @@ function entitySystem:add(c, ...)
     
     for i=1, #self.entities do
       local v = self.entities[i]
-      if v.layer == e.layer then
+      if v._layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
         break
@@ -498,7 +498,7 @@ function entitySystem:add(c, ...)
     end
     
     if not done then
-      self.entities[#self.entities + 1] = {layer = e.layer, data = {e}}
+      self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
       self.doSort = true
     end
     
@@ -550,7 +550,7 @@ function entitySystem:addExisting(e)
     
     for i=1, #self.entities do
       local v = self.entities[i]
-      if v.layer == e.layer then
+      if v._layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
         break
@@ -558,7 +558,7 @@ function entitySystem:addExisting(e)
     end
     
     if not done then
-      self.entities[#self.entities + 1] = {layer = e.layer, data = {e}}
+      self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
       self.doSort = true
     end
     
@@ -646,7 +646,7 @@ function entitySystem:makeStatic(e)
   if not e.static then
     _quickRemoveValueArray(self.updates, e)
     
-    local al = self:getLayer(e.layer)
+    local al = self:getLayer(e._layer)
     
     _quickRemoveValueArray(al.data, e)
     
@@ -682,7 +682,7 @@ function entitySystem:revertFromStatic(e)
     
     for i=1, #self.entities do
       local v = self.entities[i]
-      if v.layer == e.layer then
+      if v._layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
         break
@@ -690,7 +690,7 @@ function entitySystem:revertFromStatic(e)
     end
     
     if not done then
-      self.entities[#self.entities + 1] = {layer = e.layer, data = {e}}
+      self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
       self.doSort = true
     end
     
@@ -762,11 +762,11 @@ function entitySystem:revertFromStatic(e)
 end
 
 function entitySystem:setLayer(e, l)
-  if e.layer ~= l then
+  if e._layer ~= l then
     if not e.isAdded or e.static then
-      e.layer = l
+      e._layer = l
     else
-      local al = self:getLayer(e.layer)
+      local al = self:getLayer(e._layer)
       
       _quickRemoveValueArray(al.data, e)
       
@@ -774,14 +774,14 @@ function entitySystem:setLayer(e, l)
         _removeValueArray(self.entities, al)
       end
       
-      e.layer = l
+      e._layer = l
       
       local done = false
       
       for i=1, #self.entities do
         local v = self.entities[i]
         
-        if v.layer == e.layer then
+        if v._layer == e._layer then
           v.data[#v.data + 1] = e
           done = true
           break
@@ -789,7 +789,7 @@ function entitySystem:setLayer(e, l)
       end
       
       if not done then
-        self.entities[#self.entities + 1] = {layer = e.layer, data = {e}}
+        self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
         self.doSort = true
       end
     end
@@ -803,7 +803,7 @@ function entitySystem:remove(e)
   e:removed()
   self:removeFromAllGroups(e)
   
-  local al = self:getLayer(e.layer)
+  local al = self:getLayer(e._layer)
   
   if e.static then
     _quickRemoveValueArray(self.static, e)
@@ -1030,7 +1030,7 @@ entity = class:extend()
 function entity:init()
   if not self.recycling then
     self.collisionShape = nil
-    self.layer = 1
+    self._layer = 1
     self.isRemoved = true
     self.isAdded = false
     self.recycle = false
@@ -1047,16 +1047,20 @@ function entity:init()
 end
 
 function entity:setLayer(l)
-  if megautils.state() and megautils.state().system then
-    megautils.state().system:setLayer(self, l)
+  if self.system then
+    self.system:setLayer(self, l)
   else
-    self.layer = l
+    self._layer = l
   end
 end
 
+function entity:getLayer()
+  return self._layer
+end
+
 function entity:makeStatic()
-  if megautils.state() and megautils.state().system then
-    megautils.state().system:makeStatic(self)
+  if self.system then
+    self.system:makeStatic(self)
   else
     self.static = true
     self.staticX = self.x
@@ -1077,8 +1081,8 @@ function entity:makeStatic()
 end
 
 function entity:revertFromStatic()
-  if megautils.state() and megautils.state().system then
-    megautils.state().system:revertFromStatic(self)
+  if self.system then
+    self.system:revertFromStatic(self)
   else
     self.static = false
     self.staticX = nil
@@ -1096,8 +1100,8 @@ function entity:revertFromStatic()
 end
 
 function entity:removeFromGroup(g)
-  if megautils.state() and megautils.state().system then
-    megautils.state().system:removeFromGroup(self, g)
+  if self.system then
+    self.system:removeFromGroup(self, g)
   else
     _quickRemoveValueArray(self.groupNames, g)
   end
@@ -1108,19 +1112,25 @@ function entity:inGroup(g)
 end
 
 function entity:removeFromAllGroups()
-  if megautils.state() and megautils.state().system then
-    megautils.state().system:removeFromAllGroups(self, g)
+  if self.system then
+    self.system:removeFromAllGroups(self, g)
   else
     self.groupNames = {}
   end
 end
 
 function entity:addToGroup(g)
-  if megautils.state() and megautils.state().system then
-    megautils.state().system:addToGroup(self, g)
+  if self.system then
+    self.system:addToGroup(self, g)
   elseif not _icontains(self.groupNames, g) then
     self.groupNames[#self.groupNames + 1] = g
   end
+end
+
+function entity:getGroup(name)
+  assert(self.system, "Entity system not found. Cannot retrieve any group.")
+  
+  return self.system.groups[names]
 end
 
 function entity:setRectangleCollision(w, h)
@@ -1182,7 +1192,6 @@ function entity:collision(e, x, y, notme)
 end
 
 function entity:drawCollision()
-  if not self.collisionShape or megautils.outside(self) then return end
   if self.collisionShape.type == entitySystem.COL_RECT then
     love.graphics.rectangle("line", _floor(self.x), _floor(self.y),
       self.collisionShape.w, self.collisionShape.h)
@@ -1263,7 +1272,22 @@ function entity:getSurroundingEntities(dxx, dyy)
 end
 
 function entity:remove()
-  self.system:remove(self)
+  if self.system then
+    self.system:remove(self)
+  elseif not e.isRemoved then
+    e.isRemoved = true
+    e:removed()
+    self:removeFromAllGroups()
+    
+    e.lastHashX = nil
+    e.lastHashY = nil
+    e.lastHashX2 = nil
+    e.lastHashY2 = nil
+    e.currentHashes = nil
+    
+    e.isAdded = false
+    e.justAddedIn = false
+  end
 end
 
 function entity:ready() end
