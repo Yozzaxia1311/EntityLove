@@ -495,7 +495,7 @@ function entitySystem:add(c, ...)
   e:added()
   
   if self.inLoop then
-    e:begin()
+    e:ready()
   else
     self.readyQueue[#self.readyQueue + 1] = e
   end
@@ -555,7 +555,7 @@ function entitySystem:addExisting(e)
   e:added()
   
   if self.inLoop then
-    e:begin()
+    e:ready()
   else
     self.readyQueue[#self.readyQueue + 1] = e
   end
