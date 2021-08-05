@@ -998,21 +998,23 @@ end
 function entitySystem:conform(t)
   assert(type(t) == "table", "Provided value is not a table.")
   
-  t._layer = t._layer or 1
-  t.isRemoved = true
-  t.isAdded = false
-  t.currentHashes = nil
-  t.x = t.x or 0
-  t.y = t.y or 0
-  if t.canUpdate == nil then
-    t.canUpdate = true
+  if not t._entitySystemConformed then
+    t._layer = t._layer or 1
+    t.isRemoved = true
+    t.isAdded = false
+    t.currentHashes = nil
+    t.x = t.x or 0
+    t.y = t.y or 0
+    if t.canUpdate == nil then
+      t.canUpdate = true
+    end
+    if t.canDraw == nil then
+      t.canDraw = true
+    end
+    t.system = self
+    t.invisibleToHash = false
+    t._entitySystemConformed = true
   end
-  if t.canDraw == nil then
-    t.canDraw = true
-  end
-  t.system = self
-  t.invisibleToHash = false
-  t._entitySystemConformed = true
   
   return t
 end
