@@ -272,7 +272,7 @@ local _entityCollision = {
 -- Entity processing system.
 
 function entitySystem:init()
-  self.entities = {}
+  self.layers = {}
   self.updates = {}
   self.groups = {}
   self.static = {}
@@ -428,22 +428,22 @@ function entitySystem:sortLayers()
   local keys = {}
   local vals = {}
   
-  for k, v in pairs(self.entities) do
+  for k, v in pairs(self.layers) do
     keys[#keys + 1] = v._layer
     vals[v._layer] = v
-    self.entities[k] = nil
+    self.layers[k] = nil
   end
   
   table.sort(keys)
   
   for i=1, #keys do
-    self.entities[i] = vals[keys[i]]
+    self.layers[i] = vals[keys[i]]
   end
 end
 
 function entitySystem:getLayer(l)
-  for i=1, #self.entities do
-    local v = self.entities[i]
+  for i=1, #self.layers do
+    local v = self.layers[i]
     
     if v._layer == l then
       return v
@@ -457,8 +457,8 @@ function entitySystem:add(c, ...)
   if not e.static then
     local done = false
     
-    for i=1, #self.entities do
-      local v = self.entities[i]
+    for i=1, #self.layers do
+      local v = self.layers[i]
       if v._layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
@@ -467,7 +467,7 @@ function entitySystem:add(c, ...)
     end
     
     if not done then
-      self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
       self.doSort = true
     end
     
@@ -517,8 +517,8 @@ function entitySystem:addExisting(e)
   if not e.static then
     local done = false
     
-    for i=1, #self.entities do
-      local v = self.entities[i]
+    for i=1, #self.layers do
+      local v = self.layers[i]
       if v._layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
@@ -527,7 +527,7 @@ function entitySystem:addExisting(e)
     end
     
     if not done then
-      self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
       self.doSort = true
     end
     
@@ -620,7 +620,7 @@ function entitySystem:makeStatic(e)
     _quickRemoveValueArray(al.data, e)
     
     if #al.data == 0 then
-      _removeValueArray(self.entities, al)
+      _removeValueArray(self.layers, al)
     end
     
     self.static[#self.static + 1] = e
@@ -649,8 +649,8 @@ function entitySystem:revertFromStatic(e)
     
     local done = false
     
-    for i=1, #self.entities do
-      local v = self.entities[i]
+    for i=1, #self.layers do
+      local v = self.layers[i]
       if v._layer == e._layer then
         v.data[#v.data + 1] = e
         done = true
@@ -659,7 +659,7 @@ function entitySystem:revertFromStatic(e)
     end
     
     if not done then
-      self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
       self.doSort = true
     end
     
@@ -740,15 +740,15 @@ function entitySystem:setLayer(e, l)
       _quickRemoveValueArray(al.data, e)
       
       if #al.data == 0 then
-        _removeValueArray(self.entities, al)
+        _removeValueArray(self.layers, al)
       end
       
       e._layer = l
       
       local done = false
       
-      for i=1, #self.entities do
-        local v = self.entities[i]
+      for i=1, #self.layers do
+        local v = self.layers[i]
         
         if v._layer == e._layer then
           v.data[#v.data + 1] = e
@@ -758,7 +758,7 @@ function entitySystem:setLayer(e, l)
       end
       
       if not done then
-        self.entities[#self.entities + 1] = {layer = e._layer, data = {e}}
+        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
         self.doSort = true
       end
     end
@@ -782,7 +782,7 @@ function entitySystem:remove(e)
   end
   
   if not e.static and #al.data == 0 then
-    _removeValueArray(self.entities, al)
+    _removeValueArray(self.layers, al)
   end
   
   _quickRemoveValueArray(self.all, e)
@@ -883,7 +883,7 @@ function entitySystem:clear()
   self.all = {}
   section.sections = {}
   section.current = nil
-  self.entities = {}
+  self.layers = {}
   self.updates = {}
   self.groups = {}
   self.static = {}
@@ -899,23 +899,20 @@ function entitySystem:clear()
 end
 
 function entitySystem:draw()
-  for i=1, #self.entities do
-    for k=1, #self.entities[i].data do
-      if states.switched then
-        return
-      end
-      local v = self.entities[i].data[k]
-      if v.canDraw and not v.isRemoved and v.draw then
+  for _, layer in ipairs(self.layers) do
+    for _, v in ipairs(layer.data) do
+      if v.canDraw then
         love.graphics.setColor(1, 1, 1, 1)
-        v:_draw()
+        v:draw()
       end
     end
   end
-  if entitySystem.drawCollision and not states.switched then
+  
+  if self.drawCollision then
     love.graphics.setColor(1, 1, 1, 1)
-    for i=1, #self.entities do
-      for k=1, #self.entities[i].data do
-        self.entities[i].data[k]:drawCollision()
+    for _, layer in ipairs(self.layers) do
+      for _, v in ipairs(layer.data) do
+        v:drawCollision()
       end
     end
   end
@@ -929,42 +926,25 @@ function entitySystem:update(dt)
   
   self.inLoop = true
   
-  for i=1, #self.updates do
-    if states.switched then
-      return
-    end
-    
-    local v = self.updates[i]
+  for _, v in ipairs(self.updates) do
     v.previousX = v.x
     v.previousY = v.y
     
-    if not v.isRemoved and v.beforeUpdate and v.canUpdate then
+    if v.canUpdate then
       v:beforeUpdate(dt)
       if not v.invisibleToHash then v:updateHash() end
     end
   end
   
-  for i=1, #self.updates do
-    if states.switched then
-      return
-    end
-    
-    local v = self.updates[i]
-    
-    if not v.isRemoved and v.update and v.canUpdate then
+  for _, v in ipairs(self.updates) do    
+    if v.canUpdate then
       v:update(dt)
       if not v.invisibleToHash then v:updateHash() end
     end
   end
   
-  for i=1, #self.updates do
-    if states.switched then
-      return
-    end
-    
-    local v = self.updates[i]
-    
-    if not v.isRemoved and v.afterUpdate and v.canUpdate then
+  for _, v in ipairs(self.updates) do
+    if v.canUpdate then
       v:afterUpdate(dt)
       if not v.invisibleToHash then v:updateHash() end
     end
@@ -973,10 +953,6 @@ function entitySystem:update(dt)
   end
   
   self.inLoop = false
-  
-  if states.switched then
-    return
-  end
   
   for i=#self.removeQueue, 1, -1 do
     self:remove(self.removeQueue[i])
