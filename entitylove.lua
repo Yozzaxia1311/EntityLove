@@ -1011,6 +1011,7 @@ function entitySystem:conform(t)
     t.canDraw = true
   end
   t.system = self
+  t.invisibleToHash = false
   t._entitySystemConformed = true
   
   return t
