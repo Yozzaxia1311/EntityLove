@@ -301,7 +301,6 @@ function entitySystem:init()
   self.removeQueue = {}
   self.readyQueue = {}
   self.recycle = {}
-  self.frozen = {}
   self.hashes = {}
   self._HS =  {}
   self.doSort = false
@@ -414,16 +413,6 @@ function entitySystem:getSurroundingEntities(xx, yy, ww, hh)
   end
   
   return result or {}
-end
-
-function entitySystem:freeze(n)
-  if not _icontains(self.frozen, n or "global") then
-    self.frozen[#self.frozen + 1] = n or "global"
-  end
-end
-
-function entitySystem:unfreeze(n)
-  _quickRemoveValueArray(self.frozen, n or "global")
 end
 
 function entitySystem:emptyRecycling(c, num)
@@ -920,7 +909,6 @@ function entitySystem:clear()
   self.static = {}
   self.addQueue = {}
   self.removeQueue = {}
-  self.frozen = {}
   self.hashes = {}
   self._HS = {}
   self.doSort = false
@@ -937,7 +925,7 @@ function entitySystem:draw()
         return
       end
       local v = self.entities[i].data[k]
-      if _falseIfContainsFalse(v.canDraw) and not v.isRemoved and v.draw then
+      if v.canDraw and not v.isRemoved and v.draw then
         love.graphics.setColor(1, 1, 1, 1)
         v:_draw()
       end
@@ -965,14 +953,14 @@ function entitySystem:update(dt)
     if states.switched then
       return
     end
+    
     local v = self.updates[i]
-    if (type(v.noFreeze) == "table" and _intersects(self.frozen, v.noFreeze, true)) or v.noFreeze == true or not _trueIfContainsTrue(self.frozen) then
-      v.previousX = v.x
-      v.previousY = v.y
-      if not v.isRemoved and v.beforeUpdate and _falseIfContainsFalse(v.canUpdate) then
-        v:beforeUpdate(dt)
-        if not v.invisibleToHash then v:updateHash() end
-      end
+    v.previousX = v.x
+    v.previousY = v.y
+    
+    if not v.isRemoved and v.beforeUpdate and v.canUpdate then
+      v:beforeUpdate(dt)
+      if not v.invisibleToHash then v:updateHash() end
     end
   end
   
@@ -980,9 +968,10 @@ function entitySystem:update(dt)
     if states.switched then
       return
     end
+    
     local v = self.updates[i]
-    if ((type(v.noFreeze) == "table" and _intersects(self.frozen, v.noFreeze, true)) or v.noFreeze == true or not _trueIfContainsTrue(self.frozen)) and
-      not v.isRemoved and v.update and _falseIfContainsFalse(v.canUpdate) then
+    
+    if not v.isRemoved and v.update and v.canUpdate then
       v:update(dt)
       if not v.invisibleToHash then v:updateHash() end
     end
@@ -992,12 +981,14 @@ function entitySystem:update(dt)
     if states.switched then
       return
     end
+    
     local v = self.updates[i]
-    if ((type(v.noFreeze) == "table" and _intersects(self.frozen, v.noFreeze, true)) or v.noFreeze or not _trueIfContainsTrue(self.frozen)) and
-      not v.isRemoved and v.afterUpdate and _falseIfContainsFalse(v.canUpdate) then
+    
+    if not v.isRemoved and v.afterUpdate and v.canUpdate then
       v:afterUpdate(dt)
       if not v.invisibleToHash then v:updateHash() end
     end
+    
     v.justAddedIn = false
   end
   
@@ -1041,9 +1032,8 @@ function entity:init()
   self.groupNames = {}
   self.x = 0
   self.y = 0
-  self.canUpdate = {global = true}
-  self.canDraw = {global = true}
-  self.noFreeze = {global = false}
+  self.canUpdate = true
+  self.canDraw = true
 end
 
 function entity:setLayer(l)
