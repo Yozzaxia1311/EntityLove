@@ -17,7 +17,8 @@ local entity = class:extend()
 
 function entity:new(x, y)
   -- Manipulate all the EntityLove entity bits to your liking!
-  self.position = {} -- EntityLove uses `self.position` and `self.collisionShape` for collision and spatial hashing.
+  self.position = {} -- EntityLove uses `self.position` and
+                     -- `self.collisionShape` for collision and spatial hashing.
   self.position.x = x
   self.position.y = y
   system:setRectangleCollision(self, 32, 32) -- `self.collisionShape` is set here.
@@ -151,10 +152,28 @@ Sets `e.collisionShape` to use an ImageData object.
 
 ---
 
-**`:setCircleCollision(e, w, h)`**
+**`:setCircleCollision(e, r)`**
 
 **`e`: table - entity, `r`: number**
 
 Sets `e.collisionShape` to be a circle of radius `r`.
+
+
+---
+
+**`:getEntitiesAt(x, y, w, h)`**
+
+**`x`: number, `y`: number, `w`: number, `h`: number**
+
+Retreives entities in a rectangle defined by `x`, `y`, `w`, nd `h`. Uses spatial hashes.
+
+
+---
+
+**`:getSurroundingEntities(e, extentsLeft, extentsRight, extentsUp, extentsDown)`**
+
+**`e`: table - entity, `extentsLeft`: number, `extentsRight`: number, `extentsUp`: number, `extentsDown`: number**
+
+Retreives entities around `e`, with extents. Uses spatial hashes.
 
 ---
