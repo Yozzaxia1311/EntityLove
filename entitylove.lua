@@ -989,6 +989,7 @@ function entitySystem:_conform(t)
     t._layer = t._layer or 1
     t.isRemoved = true
     t.isAdded = false
+    t.static = false
     t._currentHashes = nil
     if t.position == nil then
       t.position = {}
