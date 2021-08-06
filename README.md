@@ -34,7 +34,7 @@ function entity:update(dt)
   -- Logic here!
 end
 
-function entity:draw() -- EntityLove auto sets color to white.
+function entity:draw() -- EntityLove auto-sets color to white.
   -- Drawing here!
 end
 
@@ -100,7 +100,7 @@ Updates entities and their position in the spatial hash, passing delta time `dt`
 
 **`:draw()`**
 
-Calls entity draw functions. Entities marked as "static" via `:makeStatic()` will not be called. The draw color is auto set as white.
+Calls entity draw functions. Entities marked as "static" via `:makeStatic()` will not be called. The draw color is auto-set to white.
 
 ---
 
