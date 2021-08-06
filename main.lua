@@ -1,52 +1,69 @@
+-- This demo demonstrates collision using the built-in spatial hashing.
+
 local system = require("entitylove")
 
-function createPlayer(x, y)
-  local player = {}
+function createParticle(x, y, speed)
+  local particle = {}
   
-  player.position = {}
-  player.position.x = x
-  player.position.y = y
-  system:setRectangleCollision(player, 32, 32)
-  
-  player.colorTimer = 0
-  
-  function player:draw()
-    love.graphics.setColor(((self.colorTimer + self.position.x) % 255) / 255,
-      ((self.colorTimer + self.position.y) % 255) / 255,
-      ((self.colorTimer + self.position.x + self.position.y) % 255) / 255,
-      1)
-    love.graphics.rectangle("fill", self.position.x, self.position.y, self.collisionShape.w, self.collisionShape.h)
+  particle.position = {}
+  particle.position.x = x
+  particle.position.y = y
+  if love.math.random(0, 1) == 1 then
+    system:setRectangleCollision(particle, love.math.random(16, 32), love.math.random(16, 32))
+  else
+    system:setCircleCollision(particle, love.math.random(8, 16))
   end
   
-  function player:update(dt)
-    self.colorTimer = self.colorTimer + dt * 100
-    
-    if love.keyboard.isDown("left") then
-      self.position.x = self.position.x - (180 * dt)
-    end
-    if love.keyboard.isDown("right") then
-      self.position.x = self.position.x + (180 * dt)
-    end
-    if love.keyboard.isDown("up") then
-      self.position.y = self.position.y - (180 * dt)
-    end
-    if love.keyboard.isDown("down") then
-      self.position.y = self.position.y + (180 * dt)
+  particle.moveTimer = 0
+  particle.speed = speed
+  particle.startY = particle.position.y
+  particle.variation = love.math.random(32, 250)
+  
+  function particle:draw()
+    -- The magic functions.
+    if system:collisionNumber(self, system:getSurroundingEntities(self)) > 0 then
+      love.graphics.setColor(1, 0, 0, 1)
+    else
+      love.graphics.setColor(1, 1, 1, 1)
     end
     
-    self.position.x = math.min(math.max(self.position.x, 0), love.graphics.getWidth() - self.collisionShape.w)
-    self.position.y = math.min(math.max(self.position.y, 0), love.graphics.getHeight() - self.collisionShape.h)
+    if self.collisionShape.type == system.COL_CIRCLE then
+      love.graphics.circle("fill", self.position.x, self.position.y, self.collisionShape.r)
+    else
+      love.graphics.rectangle("fill", self.position.x, self.position.y, self.collisionShape.w, self.collisionShape.h)
+    end
   end
   
-  return player
+  function particle:update(dt)
+    self.moveTimer = self.moveTimer + (dt * 100)
+    
+    if self.position.x < -self.collisionShape.w or self.position.x > love.graphics.getWidth() then
+      system:remove(self)
+    else
+      self.position.x = self.position.x + (self.speed * dt)
+      self.position.y = particle.startY + (math.cos(math.rad(self.moveTimer)) * self.variation)
+    end
+  end
+  
+  return particle
 end
 
-
-function love.load()
-  system:add(createPlayer(100, 100))
-end
+local timer = 0
 
 function love.update(dt)
+  local spawn = false
+  
+  timer = timer + dt
+  while timer > 0.2 do
+    timer = timer - 0.2
+    spawn = true
+  end
+  
+  if spawn then
+    system:add(createParticle(-14, 250, 100))
+    system:add(createParticle(love.graphics.getWidth() - 2, 330, -100))
+  end
+  
   system:update(dt)
 end
 

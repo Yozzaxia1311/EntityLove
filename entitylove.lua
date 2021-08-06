@@ -229,10 +229,8 @@ function entitySystem:init()
   self.groups = {}
   self.static = {}
   self.all = {}
-  self.addQueue = {}
-  self.removeQueue = {}
-  self.readyQueue = {}
-  self.hashes = {}
+  self.__readyQueue = {}
+  self._hashes = {}
   self._HS =  {}
   self._doSort = false
   self.inLoop = false
@@ -241,9 +239,9 @@ function entitySystem:init()
 end
 
 function entitySystem:update(dt)
-  while self.readyQueue[1] do
-    if self.readyQueue[1].ready then self.readyQueue[1]:ready() end
-    _remove(self.readyQueue, 1)
+  while self.__readyQueue[1] do
+    if self.__readyQueue[1].ready then self.__readyQueue[1]:ready() end
+    _remove(self.__readyQueue, 1)
   end
   
   self.inLoop = true
@@ -270,21 +268,9 @@ function entitySystem:update(dt)
       e:afterUpdate(dt)
     end
     if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
-    
-    e.justAddedIn = false
   end
   
   self.inLoop = false
-  
-  for i=#self.removeQueue, 1, -1 do
-    self:remove(self.removeQueue[i])
-    self.removeQueue[i] = nil
-  end
-  
-  for i=#self.addQueue, 1, -1 do
-    self:addExisting(self.addQueue[i])
-    self.addQueue[i] = nil
-  end
 end
 
 function entitySystem:draw()
@@ -341,11 +327,10 @@ function entitySystem:add(e)
   
   e.isRemoved = false
   e.isAdded = true
-  e.justAddedIn = true
-  e.lastHashX = nil
-  e.lastHashY = nil
-  e.lastHashX2 = nil
-  e.lastHashY2 = nil
+  e._lastHashX = nil
+  e._lastHashY = nil
+  e._lastHashX2 = nil
+  e._lastHashY2 = nil
   e.system = self
   e._currentHashes = nil
   if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e, true) end
@@ -354,20 +339,13 @@ function entitySystem:add(e)
   if self.inLoop then
     if e.ready then e:ready() end
   else
-    self.readyQueue[#self.readyQueue + 1] = e
+    self.__readyQueue[#self.__readyQueue + 1] = e
   end
   
   e.previousX = e.position.x
   e.previousY = e.position.y
   
   return e
-end
-
-function entitySystem:queueAdd(e)
-  self:_conform(e)
-  
-  self.addQueue[#self.addQueue + 1] = e
-  return self.addQueue[#self.addQueue]
 end
 
 function entitySystem:remove(e)
@@ -382,16 +360,18 @@ function entitySystem:remove(e)
   if e.static then
     _quickRemoveValueArray(self.static, e)
   else
-    _quickRemoveValueArray(al.data, e)
+    if al then
+      _quickRemoveValueArray(al.data, e)
+    end
     _quickRemoveValueArray(self.updates, e)
   end
   
-  if not e.static and #al.data == 0 then
+  if not e.static and al and #al.data == 0 then
     _removeValueArray(self.layers, al)
   end
   
   _quickRemoveValueArray(self.all, e)
-  _quickRemoveValueArray(self.readyQueue, e)
+  _quickRemoveValueArray(self.__readyQueue, e)
   
   if e._currentHashes then
     for _, v in ipairs(e._currentHashes) do
@@ -400,19 +380,19 @@ function entitySystem:remove(e)
         
         if #v.data == 0 then
           v.isRemoved = true
-          self.hashes[v.x][v.y] = nil
+          self._hashes[v.x][v.y] = nil
           self._HS[v.x] = self._HS[v.x] - 1
           
           if self._HS[v.x] == 0 then
-            self.hashes[v.x] = nil
+            self._hashes[v.x] = nil
             self._HS[v.x] = nil
           end
         end
       end
     end
   elseif e.static then
-    if e.collisionShape and e.staticX == e.position.x and e.staticY == e.position.y and
-      e.staticW == e.collisionShape.w and e.staticH == e.collisionShape.h then
+    if e.collisionShape and e._staticX == e.position.x and e._staticY == e.position.y and
+      e._staticW == e.collisionShape.w and e._staticH == e.collisionShape.h then
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
@@ -420,16 +400,16 @@ function entitySystem:remove(e)
       
       for x = cx, cx2 do
         for y = cy, cy2 do
-          if self.hashes[x] and self.hashes[x][y] and not self.hashes[x][y].isRemoved then
-            _quickRemoveValueArray(self.hashes[x][y].data, e)
+          if self._hashes[x] and self._hashes[x][y] and not self._hashes[x][y].isRemoved then
+            _quickRemoveValueArray(self._hashes[x][y].data, e)
             
-            if #self.hashes[x][y].data == 0 then
-              self.hashes[x][y].isRemoved = true
-              self.hashes[x][y] = nil
+            if #self._hashes[x][y].data == 0 then
+              self._hashes[x][y].isRemoved = true
+              self._hashes[x][y] = nil
               self._HS[x] = self._HS[x] - 1
               
               if self._HS[x] == 0 then
-                self.hashes[x] = nil
+                self._hashes[x] = nil
                 self._HS[x] = nil
               end
             end
@@ -437,17 +417,17 @@ function entitySystem:remove(e)
         end
       end
     else
-      for x, xt in pairs(self.hashes) do
+      for x, xt in pairs(self._hashes) do
         for y, yt in pairs(xt) do
           _quickRemoveValueArray(yt.data, e)
           
           if #yt.data == 0 and not yt.isRemoved then
             yt.isRemoved = true
-            self.hashes[x][y] = nil
+            self._hashes[x][y] = nil
             self._HS[x] = self._HS[x] - 1
             
             if self._HS[x] == 0 then
-              self.hashes[x] = nil
+              self._hashes[x] = nil
               self._HS[x] = nil
             end
           end
@@ -456,20 +436,14 @@ function entitySystem:remove(e)
     end
   end
   
-  e.lastHashX = nil
-  e.lastHashY = nil
-  e.lastHashX2 = nil
-  e.lastHashY2 = nil
+  e._lastHashX = nil
+  e._lastHashY = nil
+  e._lastHashX2 = nil
+  e._lastHashY2 = nil
   e._currentHashes = nil
   e.system = nil
   
   e.isAdded = false
-  e.justAddedIn = false
-end
-
-function entitySystem:queueRemove(e)
-  if not e or e.isRemoved or _icontains(self.removeQueue, e) then return end
-  self.removeQueue[#self.removeQueue + 1] = e
 end
 
 function entitySystem:clear()
@@ -482,12 +456,10 @@ function entitySystem:clear()
   self.updates = {}
   self.groups = {}
   self.static = {}
-  self.addQueue = {}
-  self.removeQueue = {}
-  self.hashes = {}
+  self._hashes = {}
   self._HS = {}
   self._doSort = false
-  self.readyQueue = {}
+  self.__readyQueue = {}
   
   collectgarbage()
   collectgarbage()
@@ -557,7 +529,7 @@ function entitySystem:_getLayerData(l)
   for i=1, #self.layers do
     local v = self.layers[i]
     
-    if v._layer == l then
+    if v.layer == l then
       return v
     end
   end
@@ -582,17 +554,17 @@ function entitySystem:makeStatic(e)
     end
     
     e.static = true
-    e.staticX = e.position.x
-    e.staticY = e.position.y
+    e._staticX = e.position.x
+    e._staticY = e.position.y
     if e.collisionShape then
-      e.staticW = e.collisionShape.w
-      e.staticH = e.collisionShape.h
+      e._staticW = e.collisionShape.w
+      e._staticH = e.collisionShape.h
     end
     
-    e.lastHashX = nil
-    e.lastHashY = nil
-    e.lastHashX2 = nil
-    e.lastHashY2 = nil
+    e._lastHashX = nil
+    e._lastHashY = nil
+    e._lastHashX2 = nil
+    e._lastHashY2 = nil
     e._currentHashes = nil
     
     if e.staticToggled then e:staticToggled() end
@@ -623,8 +595,8 @@ function entitySystem:revertFromStatic(e)
     
     self.updates[#self.updates + 1] = e
     
-    if e.collisionShape and e.staticX == e.position.x and e.staticY == e.position.y and
-      e.staticW == e.collisionShape.w and e.staticH == e.collisionShape.h then
+    if e.collisionShape and e._staticX == e.position.x and e._staticY == e.position.y and
+      e._staticW == e.collisionShape.w and e._staticH == e.collisionShape.h then
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
@@ -632,16 +604,16 @@ function entitySystem:revertFromStatic(e)
       
       for x = cx, cx2 do
         for y = cy, cy2 do
-          if self.hashes[x] and self.hashes[x][y] and not self.hashes[x][y].isRemoved then
-            _quickRemoveValueArray(self.hashes[x][y].data, e)
+          if self._hashes[x] and self._hashes[x][y] and not self._hashes[x][y].isRemoved then
+            _quickRemoveValueArray(self._hashes[x][y].data, e)
             
-            if #self.hashes[x][y].data == 0 then
-              self.hashes[x][y].isRemoved = true
-              self.hashes[x][y] = nil
+            if #self._hashes[x][y].data == 0 then
+              self._hashes[x][y].isRemoved = true
+              self._hashes[x][y] = nil
               self._HS[x] = self._HS[x] - 1
               
               if self._HS[x] == 0 then
-                self.hashes[x] = nil
+                self._hashes[x] = nil
                 self._HS[x] = nil
               end
             end
@@ -649,7 +621,7 @@ function entitySystem:revertFromStatic(e)
         end
       end
     else
-      for x, xt in pairs(self.hashes) do
+      for x, xt in pairs(self._hashes) do
         for y, yt in pairs(xt) do
           if _icontains(yt.data, e) then
             _quickRemoveValueArray(yt.data, e)
@@ -657,11 +629,11 @@ function entitySystem:revertFromStatic(e)
           
           if #yt.data == 0 and not yt.isRemoved then
             yt.isRemoved = true
-            self.hashes[x][y] = nil
+            self._hashes[x][y] = nil
             self._HS[x] = self._HS[x] - 1
             
             if self._HS[x] == 0 then
-              self.hashes[x] = nil
+              self._hashes[x] = nil
               self._HS[x] = nil
             end
           end
@@ -670,14 +642,14 @@ function entitySystem:revertFromStatic(e)
     end
     
     e.static = false
-    e.staticX = nil
-    e.staticY = nil
-    e.staticW = nil
-    e.staticH = nil
-    e.lastHashX = nil
-    e.lastHashY = nil
-    e.lastHashX2 = nil
-    e.lastHashY2 = nil
+    e._staticX = nil
+    e._staticY = nil
+    e._staticW = nil
+    e._staticH = nil
+    e._lastHashX = nil
+    e._lastHashY = nil
+    e._lastHashX2 = nil
+    e._lastHashY2 = nil
     e._currentHashes = nil
     e.system = self
     
@@ -781,36 +753,37 @@ function entitySystem:setCircleCollision(e, r)
   self:updateEntityHashWhenNeeded(e)
 end
 
-function entitySystem:collision(e, other, x, y, notme)
+function entitySystem:collision(e, other, x, y)
   self:_conform(e)
   
-  return e and other and (not notme or other ~= e) and e.collisionShape and other.collisionShape and
+  return other and other ~= e and e.collisionShape and other.collisionShape and
     _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
 end
 
-function entitySystem:collisionTable(e, table, x, y, notme, func)
+function entitySystem:collisionTable(e, table, x, y)
   self:_conform(e)
   
   local result = {}
   if not table then return result end
   for i=1, #table do
-    if self:collision(e, table[i], x, y, notme) and (func == nil or func(v)) then
+    if self:collision(e, table[i], x, y) then
       result[#result+1] = table[i]
     end
   end
   return result
 end
 
-function entitySystem:collisionNumber(e, table, x, y, notme, func)
+function entitySystem:collisionNumber(e, table, x, y)
   self:_conform(e)
   
   local result = 0
   if not table then return result end
   for i=1, #table do
-    if self:collision(e, table[i], x, y, notme) and (func == nil or func(t[i])) then
+    if self:collision(e, table[i], x, y) then
       result = result + 1
     end
   end
+  
   return result
 end
 
@@ -844,23 +817,23 @@ function entitySystem:updateEntityHash(e)
     
     for x = cx, cx2 do
       for y = cy, cy2 do
-        if not self.hashes[x] then
-          self.hashes[x] = {[y] = {x = x, y = y, data = {e}, isRemoved = false}}
+        if not self._hashes[x] then
+          self._hashes[x] = {[y] = {x = x, y = y, data = {e}, isRemoved = false}}
           self._HS[x] = 1
-        elseif not self.hashes[x][y] then
-          self.hashes[x][y] = {x = x, y = y, data = {e}, isRemoved = false}
+        elseif not self._hashes[x][y] then
+          self._hashes[x][y] = {x = x, y = y, data = {e}, isRemoved = false}
           self._HS[x] = self._HS[x] + 1
-        elseif not _icontains(self.hashes[x][y].data, e) then
-          self.hashes[x][y].data[#self.hashes[x][y].data+1] = e
-          self.hashes[x][y].data[#self.hashes[x][y].data].isRemoved = false
+        elseif not _icontains(self._hashes[x][y].data, e) then
+          self._hashes[x][y].data[#self._hashes[x][y].data+1] = e
+          self._hashes[x][y].data[#self._hashes[x][y].data].isRemoved = false
         end
         
-        if not _icontains(e._currentHashes, self.hashes[x][y]) then
-          e._currentHashes[#e._currentHashes+1] = self.hashes[x][y]
+        if not _icontains(e._currentHashes, self._hashes[x][y]) then
+          e._currentHashes[#e._currentHashes+1] = self._hashes[x][y]
         end
         
-        if self.hashes[x] and self.hashes[x][y] then
-          check[#check + 1] = self.hashes[x][y]
+        if self._hashes[x] and self._hashes[x][y] then
+          check[#check + 1] = self._hashes[x][y]
         end
       end
     end
@@ -873,11 +846,11 @@ function entitySystem:updateEntityHash(e)
             
             if #v.data == 0 then
               v.isRemoved = true
-              self.hashes[v.x][v.y] = nil
+              self._hashes[v.x][v.y] = nil
               self._HS[v.x] = self._HS[v.x] - 1
               
               if self._HS[v.x] == 0 then
-                self.hashes[v.x] = nil
+                self._hashes[v.x] = nil
                 self._HS[v.x] = nil
               end
             end
@@ -896,11 +869,11 @@ function entitySystem:updateEntityHash(e)
         
         if #v.data == 0 then
           v.isRemoved = true
-          self.hashes[v.x][v.y] = nil
+          self._hashes[v.x][v.y] = nil
           self._HS[v.x] = self._HS[v.x] - 1
           
           if self._HS[v.x] == 0 then
-            self.hashes[v.x] = nil
+            self._hashes[v.x] = nil
             self._HS[v.x] = nil
           end
         end
@@ -920,11 +893,11 @@ function entitySystem:updateEntityHashWhenNeeded(e, doAnyway)
     local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
     local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
     
-    if doAnyway or e.lastHashX ~= cx or e.lastHashY ~= cy or e.lastHashX2 ~= cx2 or e.lastHashY2 ~= cy2 then
-      e.lastHashX = cx
-      e.lastHashY = cy
-      e.lastHashX2 = cx2
-      e.lastHashY2 = cy2
+    if doAnyway or e._lastHashX ~= cx or e._lastHashY ~= cy or e._lastHashX2 ~= cx2 or e._lastHashY2 ~= cy2 then
+      e._lastHashX = cx
+      e._lastHashY = cy
+      e._lastHashX2 = cx2
+      e._lastHashY2 = cy2
       
       self:updateEntityHash(e)
     end
@@ -937,8 +910,8 @@ function entitySystem:getEntitiesAt(xx, yy, ww, hh)
   
   for x = _floor((xx - 2) / hs), _floor((xx + ww + 2) / hs) do
     for y = _floor((yy - 2) / hs), _floor((yy + hh + 2) / hs) do
-      if self.hashes[x] and self.hashes[x][y] then
-        local hash = self.hashes[x][y]
+      if self._hashes[x] and self._hashes[x][y] then
+        local hash = self._hashes[x][y]
         
         if not result and #hash.data > 0 then
           result = {unpack(hash.data)}
@@ -958,15 +931,14 @@ end
 
 function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, extentsUp, extentsDown)
   self:_conform(e)
-  assert(extentsLeft < 0 or extentsRight < 0 or extentsUp < 0 or extentsDown < 0, "Extents must be positive!")
   
-  if e.invisibleToHash then
+  if e.invisibleToHash or e.isRemoved then
     return {}
   end
   
   if extentsLeft or extentsRight or extentsUp or extentsDown or not e._currentHashes then
-    return self:getEntitiesAt(e.position.x - extentsLeft, e.position.y + extentsUp,
-      extentsLeft + extentsRight, extentsUp + extentsDown)
+    return self:getEntitiesAt(e.position.x - (extentsLeft or 0), e.position.y + (extentsUp or 0),
+      (extentsLeft or 0) + (extentsRight or 0), (extentsUp or 0) + (extentsDown or 0))
   end
   
   self:updateEntityHashWhenNeeded(e)
@@ -985,6 +957,8 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
 end
 
 function entitySystem:_conform(t)
+  assert(type(t) == "table", "Value given is not a table!")
+  
   if not t._entitySystemConformed then
     t._layer = t._layer or 1
     t.isRemoved = true
