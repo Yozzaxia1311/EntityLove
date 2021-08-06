@@ -106,7 +106,7 @@ Calls entity draw functions. Entities marked as "static" via `:makeStatic()` wil
 
 **`:add(e)`**
 
-**`e`: table**
+**`e`: table - entity**
 
 Adds entity into the system. Calls `e:added()`.
 
@@ -228,33 +228,33 @@ Retreives entities around `e`, with extents. Uses spatial hashes.
 
 ---
 
-**`:collision(e, other, ox, oy, notme)`**
+**`:collision(e, other, ox, oy)`**
 
-**`e`: table - entity, `other`: table - entity, `ox`: number, `oy`: number, `notme`: boolean**
+**`e`: table - entity, `other`: table - entity, `ox`: number, `oy`: number
 
 **returns boolean**
 
-Checks if `e` and `other` are colliding. `e` will be offset by `ox` and `oy`, if provided. If `notme`, then the function will return `false` if both entities are the same.
+Checks if `e` and `other` are colliding. `e` will be offset by `ox` and `oy`, if provided. This function will return `false` if both entities are the same.
 
 ---
 
-**`:collisionTable(e, table, ox, oy, notme)`**
+**`:collisionTable(e, table, ox, oy)`**
 
-**`e`: table - entity, `table`: table, `ox`: number, `oy`: number, `notme`: boolean**
+**`e`: table - entity, `table`: table, `ox`: number, `oy`: number
 
 **returns table**
 
-Checks if `e` and any entity in `table` are colliding, then returns a table of colliding entities. `e` will be offset by `ox` and `oy`, if provided. If `notme`, then the function will ignore checks between `e` and itself.
+Checks if `e` and any entity in `table` are colliding, then returns a table of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself.
 
 ---
 
-**`:collisionNumber(e, table, ox, oy, notme)`**
+**`:collisionNumber(e, table, ox, oy)`**
 
-**`e`: table - entity, `table`: table, `ox`: number, `oy`: number, `notme`: boolean**
+**`e`: table - entity, `table`: table, `ox`: number, `oy`: number
 
 **returns number**
 
-Checks if `e` and any entity in `table` are colliding, then returns the number of colliding entities. `e` will be offset by `ox` and `oy`, if provided. If `notme`, then the function will ignore checks between `e` and itself.
+Checks if `e` and any entity in `table` are colliding, then returns the number of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself.
 
 ---
 
