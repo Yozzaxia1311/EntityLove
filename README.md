@@ -10,7 +10,7 @@ First, create the system:
 local system = require("entitylove")
 ```
 
-Then, create the entity using your class implementation of choice (or an empty table will work, too!), and conform it to EntityLove:
+Then, create the entity using your class implementation of choice (or an empty table will work, too!):
 
 ```lua
 local entity = class:extend()
