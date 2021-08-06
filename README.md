@@ -2,7 +2,7 @@
 
 EntityLove is a entity handling system with built in z-indexing, collision, and spatial hashing support.
 
-![img](https://github.com/Yozzaxia1311/EntityLove/blob/main/demo.gif)
+<img src="https://github.com/Yozzaxia1311/EntityLove/blob/main/demo.gif" width="600px">
 
 # How to Use
 
