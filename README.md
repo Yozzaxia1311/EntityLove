@@ -23,7 +23,8 @@ function entity:new(x, y)
   self.position.y = y
   system:setRectangleCollision(self, 32, 32) -- `self.collisionShape` is set here.
   system:addToGroup(self, "myGroup") -- Retrieve group table using `system.groups["groupName"]`.
-                                     -- Entities will be removed from all groups when `system:remove(e)` is called.
+                                     -- Entities will be removed from all groups
+                                     -- when `system:remove(e)` is called.
 end
 
 -- EntityLove checks for special event functions to call.
