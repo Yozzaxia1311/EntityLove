@@ -84,6 +84,14 @@ Removes entity from the system. Calls `e:removed()`, and removes the entity from
 
 ---
 
+**`:queueRemove(e)`**
+
+**`e`: table - entity**
+
+Queues entity to be removed outside the update loop.
+
+---
+
 **`:addToGroup(e, name)`**
 
 **`e`: table - entity, `name`: string**
