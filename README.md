@@ -71,6 +71,23 @@ end
 
 **`.COL_CIRCLE`: enum = 3**: Circle collider type.
 
+**`inLoop`: readonly boolean**: If currently in update loop.
+
+**`drawCollision`: readonly boolean**: draws collision for active entities. Useful for debugging.
+
+**`groups`: readonly table**: table of groups.
+
+**`all`: readonly table**: table of all entities.
+
+**`updates`: readonly table**: table of updated entities.
+
+**`layers`: readonly table**: table of layers.
+
+- **`.layer`: readonly number**: Z index.
+- **`.data`: readonly table**: table of entities on this z index.
+
+**`static`: readonly table**: table of static entities. Read `:makeStatic(e)` documention for more details.
+
 ---
 
 **`:update(dt)`**
