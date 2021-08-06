@@ -254,15 +254,15 @@ function entitySystem:updateHashForEntity(e)
   self:_conform(e)
   
   if e.collisionShape and not e.invisibleToHash then
-    if not e.currentHashes then
-      e.currentHashes = {}
+    if not e._currentHashes then
+      e._currentHashes = {}
     end
     
     local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
     local hs = entitySystem.HASH_SIZE
     local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
     local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
-    local emptyBefore = #e.currentHashes == 0
+    local emptyBefore = #e._currentHashes == 0
     local check = {}
     
     for x = cx, cx2 do
@@ -278,8 +278,8 @@ function entitySystem:updateHashForEntity(e)
           self.hashes[x][y].data[#self.hashes[x][y].data].isRemoved = false
         end
         
-        if not _icontains(e.currentHashes, self.hashes[x][y]) then
-          e.currentHashes[#e.currentHashes+1] = self.hashes[x][y]
+        if not _icontains(e._currentHashes, self.hashes[x][y]) then
+          e._currentHashes[#e._currentHashes+1] = self.hashes[x][y]
         end
         
         if self.hashes[x] and self.hashes[x][y] then
@@ -289,7 +289,7 @@ function entitySystem:updateHashForEntity(e)
     end
     
     if not emptyBefore then
-      for _, v in ipairs(e.currentHashes) do
+      for _, v in ipairs(e._currentHashes) do
         if v.isRemoved or not _icontains(check, v) then
           if not v.isRemoved then
             _quickRemoveValueArray(v.data, e)
@@ -306,13 +306,13 @@ function entitySystem:updateHashForEntity(e)
             end
           end
           
-          _quickRemoveValueArray(e.currentHashes, v)
+          _quickRemoveValueArray(e._currentHashes, v)
         end
       end
     end
-  elseif e.currentHashes and #e.currentHashes ~= 0 then -- If there's no collision, then remove from hash.
-    for i = 1, #e.currentHashes do
-      local v = e.currentHashes[i]
+  elseif e._currentHashes and #e._currentHashes ~= 0 then -- If there's no collision, then remove from hash.
+    for i = 1, #e._currentHashes do
+      local v = e._currentHashes[i]
       
       if not v.isRemoved then
         _quickRemoveValueArray(v.data, e)
@@ -330,7 +330,7 @@ function entitySystem:updateHashForEntity(e)
       end
     end
     
-    e.currentHashes = nil
+    e._currentHashes = nil
   end
 end
 
@@ -444,7 +444,7 @@ function entitySystem:add(e)
   e.lastHashX2 = nil
   e.lastHashY2 = nil
   e.system = self
-  e.currentHashes = nil
+  e._currentHashes = nil
   if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e, true) end
   if e.added then e:added() end
   
@@ -524,7 +524,7 @@ function entitySystem:makeStatic(e)
     e.lastHashY = nil
     e.lastHashX2 = nil
     e.lastHashY2 = nil
-    e.currentHashes = nil
+    e._currentHashes = nil
     
     if e.staticToggled then e:staticToggled() end
   end
@@ -609,7 +609,7 @@ function entitySystem:revertFromStatic(e)
     e.lastHashY = nil
     e.lastHashX2 = nil
     e.lastHashY2 = nil
-    e.currentHashes = nil
+    e._currentHashes = nil
     
     if not e.invisibleToHash then
       self:updateEntityHashWhenNeeded(e)
@@ -766,19 +766,19 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
     return {}
   end
   
-  if extentsLeft or extentsRight or extentsUp or extentsDown or not e.currentHashes then
+  if extentsLeft or extentsRight or extentsUp or extentsDown or not e._currentHashes then
     return self:getEntitiesAt(e.position.x - extentsLeft, e.position.y + extentsUp,
       extentsLeft + extentsRight, extentsUp + extentsDown)
   end
   
   self:updateEntityHashWhenNeeded(e)
   
-  local result = e.currentHashes[1] and {unpack(e.currentHashes[1].data)} or {}
+  local result = e._currentHashes[1] and {unpack(e._currentHashes[1].data)} or {}
   
-  for i = 2, #e.currentHashes do
-    for j = 1, #e.currentHashes[i].data do
-      if not _icontains(result, e.currentHashes[i].data[j]) then
-        result[#result + 1] = e.currentHashes[i].data[j]
+  for i = 2, #e._currentHashes do
+    for j = 1, #e._currentHashes[i].data do
+      if not _icontains(result, e._currentHashes[i].data[j]) then
+        result[#result + 1] = e._currentHashes[i].data[j]
       end
     end
   end
@@ -811,8 +811,8 @@ function entitySystem:remove(e)
   _quickRemoveValueArray(self.all, e)
   _quickRemoveValueArray(self.readyQueue, e)
   
-  if e.currentHashes then
-    for _, v in ipairs(e.currentHashes) do
+  if e._currentHashes then
+    for _, v in ipairs(e._currentHashes) do
       if not v.isRemoved then
         _quickRemoveValueArray(v.data, e)
         
@@ -878,7 +878,7 @@ function entitySystem:remove(e)
   e.lastHashY = nil
   e.lastHashX2 = nil
   e.lastHashY2 = nil
-  e.currentHashes = nil
+  e._currentHashes = nil
   e.system = nil
   
   e.isAdded = false
@@ -989,7 +989,7 @@ function entitySystem:_conform(t)
     t._layer = t._layer or 1
     t.isRemoved = true
     t.isAdded = false
-    t.currentHashes = nil
+    t._currentHashes = nil
     if t.position == nil then
       t.position = {}
     end
