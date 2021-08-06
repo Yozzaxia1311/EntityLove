@@ -499,7 +499,7 @@ end
 function entitySystem:makeStatic(e)
   self:_conform(e)
   
-  if not e.static then
+  if not e.static and not e.isRemoved then
     _quickRemoveValueArray(self.updates, e)
     
     local al = self:_getLayerData(e._layer)
@@ -510,7 +510,9 @@ function entitySystem:makeStatic(e)
       _removeValueArray(self.layers, al)
     end
     
-    self.static[#self.static + 1] = e
+    if not _icontains(self.static, e) then
+      self.static[#self.static + 1] = e
+    end
     
     e.static = true
     e.staticX = e.position.x
@@ -533,7 +535,7 @@ end
 function entitySystem:revertFromStatic(e)
   self:_conform(e)
   
-  if e.static then
+  if e.static and not e.isRemoved then
     _quickRemoveValueArray(self.static, e)
     
     local done = false
@@ -789,8 +791,6 @@ end
 
 function entitySystem:remove(e)
   self:_conform(e)
-  
-  if e.isRemoved then return end
   
   e.isRemoved = true
   if e.removed then e:removed() end
