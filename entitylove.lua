@@ -75,6 +75,19 @@ local function _removeValueArray(t, va)
   end
 end
 
+local function _quickRemove(t, i)
+  t[i] = t[#t]
+  t[#t] = nil
+end
+
+local function _findIndexArray(t, va)
+  for i=1, #t do
+    if t[i] == va then
+      return i
+    end
+  end
+end
+
 local function _quickRemoveValueArray(t, va)
   if t[#t] == va then t[#t] = nil return end
   
@@ -225,49 +238,78 @@ local _entityCollision = {
 
 function entitySystem:init()
   self.layers = {}
-  self.updates = {}
+  self._updates = {}
   self.groups = {}
   self.static = {}
   self.all = {}
-  self.__readyQueue = {}
+  self._readyQueue = {}
   self._hashes = {}
   self._HS =  {}
   self._doSort = false
   self.inLoop = false
   self.drawCollision = false
   self._imgCache = {}
+  self._updateHoles = {}
 end
 
 function entitySystem:update(dt)
-  while self.__readyQueue[1] do
-    if self.__readyQueue[1].ready then self.__readyQueue[1]:ready() end
-    _remove(self.__readyQueue, 1)
+  while self._readyQueue[1] do
+    if self._readyQueue[1].ready and not self._readyQueue[1].isRemoved then
+      self._readyQueue[1]:ready()
+    end
+    _remove(self._readyQueue, 1)
   end
   
   self.inLoop = true
   
-  for _, e in ipairs(self.updates) do
-    e.previousX = e.position.x
-    e.previousY = e.position.y
+  local i = 1
+  while i <= #self._updates do
+    local e = self._updates[i]
     
-    if e.beforeUpdate and e.canUpdate then
-      e:beforeUpdate(dt)
+    if e ~= -1 then
+      e.previousX = e.position.x
+      e.previousY = e.position.y
+      
+      if e.beforeUpdate and e.canUpdate then
+        e:beforeUpdate(dt)
+      end
+      if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
     end
-    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
+    
+    i = i + 1
   end
   
-  for _, e in ipairs(self.updates) do    
-    if e.update and e.canUpdate then
-      e:update(dt)
+  i = 1
+  while i <= #self._updates do
+    local e = self._updates[i]
+    
+    if e ~= -1 then
+      if e.update and e.canUpdate then
+        e:update(dt)
+      end
+      if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
     end
-    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
+    
+    i = i + 1
   end
   
-  for _, e in ipairs(self.updates) do
-    if e.afterUpdate and e.canUpdate then
-      e:afterUpdate(dt)
+  i = 1
+  while i <= #self._updates do
+    local e = self._updates[i]
+    
+    if e ~= -1 then
+      if e.afterUpdate and e.canUpdate then
+        e:afterUpdate(dt)
+      end
+      if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
     end
-    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
+    
+    i = i + 1
+  end
+  
+  if #self._updateHoles > 0 then
+    self:_removeHoles(self._updates)
+    self._updateHoles = {}
   end
   
   self.inLoop = false
@@ -279,23 +321,38 @@ function entitySystem:draw()
     self:_sortLayers()
   end
   
+  self.inLoop = true
+  
   for _, layer in ipairs(self.layers) do
-    for _, e in ipairs(layer.data) do
-      if e.draw and e.canDraw then
+    local i = 1
+    
+    while i <= #layer.data do
+      local e = layer.data[i]
+      
+      if e ~= -1 and e.draw and e.canDraw then
         love.graphics.setColor(1, 1, 1, 1)
         e:draw()
       end
+      
+      i = i + 1
+    end
+    
+    if #layer.holes > 0 then
+      self:_removeHoles(layer.data)
+      layer.holes = {}
     end
   end
   
   if self.drawCollision then
     love.graphics.setColor(1, 1, 1, 1)
-    for _, layer in ipairs(self.layers) do
-      for _, e in ipairs(layer.data) do
-        self:drawCollision(e)
+    for i = 1, #self.layers do
+      for j = 1, self.layers[i].data do
+        self:drawCollision(self.layers[i].data[j])
       end
     end
   end
+  
+  self.inLoop = false
 end
 
 function entitySystem:add(e)
@@ -306,19 +363,32 @@ function entitySystem:add(e)
     
     for i=1, #self.layers do
       local v = self.layers[i]
+      
       if v.layer == e._layer then
-        v.data[#v.data + 1] = e
+        local nextHole = next(v.holes)
+        if nextHole then
+          v.data[nextHole] = e
+          v.holes[nextHole] = nil
+        else
+          v.data[#v.data + 1] = e
+        end
         done = true
         break
       end
     end
     
     if not done then
-      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}, holes = {}}
       self._doSort = true
     end
     
-    self.updates[#self.updates + 1] = e
+    local nextHole = next(self._updateHoles)
+    if nextHole then
+      self._updates[nextHole] = e
+      self._updateHoles[nextHole] = nil
+    else
+      self._updates[#self._updates + 1] = e
+    end
   else
     self.static[#self.static + 1] = e
   end
@@ -339,7 +409,7 @@ function entitySystem:add(e)
   if self.inLoop then
     if e.ready then e:ready() end
   else
-    self.__readyQueue[#self.__readyQueue + 1] = e
+    self._readyQueue[#self._readyQueue + 1] = e
   end
   
   e.previousX = e.position.x
@@ -348,8 +418,21 @@ function entitySystem:add(e)
   return e
 end
 
+function entitySystem:_removeHoles(t)
+  for i = 1, #t do
+    if t[i] == -1 then
+      _quickRemove(t, i)
+    end
+  end
+end
+
 function entitySystem:remove(e)
   self:_conform(e)
+  
+  if #self._updateHoles > 100 then
+    self:_removeHoles(self._updates)
+    self._updateHoles = {}
+  end
   
   e.isRemoved = true
   if e.removed then e:removed() end
@@ -361,17 +444,31 @@ function entitySystem:remove(e)
     _quickRemoveValueArray(self.static, e)
   else
     if al then
-      _quickRemoveValueArray(al.data, e)
+      if #al.holes > 100 then
+        self:_removeHoles(al.holes)
+        al.holes = {}
+      end
+      
+      local i = _findIndexArray(al.data, e)
+      if i then
+        al.data[i] = -1
+        al.holes[i] = true
+      end
     end
-    _quickRemoveValueArray(self.updates, e)
+    
+    local i = _findIndexArray(self._updates, e)
+    if i then
+      self._updates[i] = -1
+      self._updateHoles[i] = true
+    end
   end
   
-  if not e.static and al and #al.data == 0 then
+  if not e.static and al and next(al.data) == nil then
     _removeValueArray(self.layers, al)
   end
   
   _quickRemoveValueArray(self.all, e)
-  _quickRemoveValueArray(self.__readyQueue, e)
+  _quickRemoveValueArray(self._readyQueue, e)
   
   if e._currentHashes then
     for _, v in ipairs(e._currentHashes) do
@@ -453,13 +550,15 @@ function entitySystem:clear()
   
   self.all = {}
   self.layers = {}
-  self.updates = {}
+  self._updates = {}
   self.groups = {}
   self.static = {}
   self._hashes = {}
   self._HS = {}
   self._doSort = false
-  self.__readyQueue = {}
+  self._readyQueue = {}
+  self._removeQueue = {}
+  self._updateHoles = {}
   
   collectgarbage()
   collectgarbage()
@@ -474,10 +573,21 @@ function entitySystem:setLayer(e, l)
     else
       local al = self:_getLayerData(e._layer)
       
-      _quickRemoveValueArray(al.data, e)
-      
-      if #al.data == 0 then
-        _removeValueArray(self.layers, al)
+      if al then
+        if #al.holes > 100 then
+          self:_removeHoles(al.holes)
+          al.holes = {}
+        end
+        
+        local i = _findIndexArray(al.data, e)
+        if i then
+          al.data[i] = -1
+          al.holes[i] = true
+        end
+        
+        if #al.data == 0 then
+          _removeValueArray(self.layers, al)
+        end
       end
       
       e._layer = l
@@ -488,14 +598,20 @@ function entitySystem:setLayer(e, l)
         local v = self.layers[i]
         
         if v.layer == e._layer then
-          v.data[#v.data + 1] = e
+          local nextHole = next(v.holes)
+          if nextHole then
+            v.data[nextHole] = e
+            v.holes[nextHole] = nil
+          else
+            v.data[#v.data + 1] = e
+          end
           done = true
           break
         end
       end
       
       if not done then
-        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
+        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}, holes = {}}
         self._doSort = true
       end
     end
@@ -539,14 +655,34 @@ function entitySystem:makeStatic(e)
   self:_conform(e)
   
   if not e.static and not e.isRemoved then
-    _quickRemoveValueArray(self.updates, e)
+    if #self._updateHoles > 100 then
+      self:_removeHoles(self._updates)
+      self._updateHoles = {}
+    end
+    
+    local i = _findIndexArray(self._updates, e)
+    if i then
+      self._updates[i] = -1
+      self._updateHoles[i] = true
+    end
     
     local al = self:_getLayerData(e._layer)
     
-    _quickRemoveValueArray(al.data, e)
-    
-    if #al.data == 0 then
-      _removeValueArray(self.layers, al)
+    if al then
+      if #al.holes > 100 then
+        self:_removeHoles(al.holes)
+        al.holes = {}
+      end
+      
+      local i = _findIndexArray(al.data, e)
+      if i then
+        al.data[i] = -1
+        al.holes[i] = true
+      end
+      
+      if #al.data == 0 then
+        _removeValueArray(self.layers, al)
+      end
     end
     
     if not _icontains(self.static, e) then
@@ -582,18 +718,30 @@ function entitySystem:revertFromStatic(e)
     for i=1, #self.layers do
       local v = self.layers[i]
       if v.layer == e._layer then
-        v.data[#v.data + 1] = e
+        local nextHole = next(v.holes)
+        if nextHole then
+          v.data[nextHole] = e
+          v.holes[nextHole] = nil
+        else
+          v.data[#v.data + 1] = e
+        end
         done = true
         break
       end
     end
     
     if not done then
-      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}, holes = {}}
       self._doSort = true
     end
     
-    self.updates[#self.updates + 1] = e
+    local nextHole = next(self._updateHoles)
+    if nextHole then
+      self._updates[nextHole] = e
+      self._updateHoles[nextHole] = nil
+    else
+      self._updates[#self._updates + 1] = e
+    end
     
     if e.collisionShape and e._staticX == e.position.x and e._staticY == e.position.y and
       e._staticW == e.collisionShape.w and e._staticH == e.collisionShape.h then
@@ -764,12 +912,13 @@ function entitySystem:collisionTable(e, table, x, y)
   self:_conform(e)
   
   local result = {}
-  if not table then return result end
-  for i=1, #table do
-    if self:collision(e, table[i], x, y) then
+  
+  for i = 1, #table do
+    if type(table[i]) == "table" and self:collision(e, table[i], x, y) then
       result[#result+1] = table[i]
     end
   end
+  
   return result
 end
 
@@ -777,9 +926,9 @@ function entitySystem:collisionNumber(e, table, x, y)
   self:_conform(e)
   
   local result = 0
-  if not table then return result end
-  for i=1, #table do
-    if self:collision(e, table[i], x, y) then
+  
+  for i = 1, #table do
+    if type(table[i]) == "table" and self:collision(e, table[i], x, y) then
       result = result + 1
     end
   end

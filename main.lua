@@ -1,5 +1,7 @@
 -- This demo demonstrates collision using the built-in spatial hashing.
 
+io.stdout:setvbuf("no")
+
 local system = require("entitylove")
 
 function createParticle(x, y, speed)
@@ -49,6 +51,7 @@ function createParticle(x, y, speed)
 end
 
 local timer = 0
+local timer2 = 0
 
 function love.update(dt)
   local spawn = false
@@ -65,6 +68,12 @@ function love.update(dt)
   end
   
   system:update(dt)
+  
+  timer2 = timer2 + dt
+  if timer2 > 1 then
+    timer2 = 0
+    print("Entities", #system.all)
+  end
 end
 
 function love.draw()

@@ -79,8 +79,6 @@ end
 
 **`.all`: readonly table**: table of all entities.
 
-**`.updates`: readonly table**: table of "non-static" entities. Read `:makeStatic(e)` documention for more details.
-
 **`.layers`: readonly table**: table of layers.
 
 - **`[index].layer`: readonly number**: Z index.
@@ -244,7 +242,7 @@ Checks if `e` and `other` are colliding. `e` will be offset by `ox` and `oy`, if
 
 **returns table**
 
-Checks if `e` and any entity in `table` are colliding, then returns a table of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself.
+Checks if `e` and any entity in `table` are colliding, then returns a table of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself. For performance reasons, this function expects `table` to be an array.
 
 ---
 
@@ -254,7 +252,7 @@ Checks if `e` and any entity in `table` are colliding, then returns a table of c
 
 **returns number**
 
-Checks if `e` and any entity in `table` are colliding, then returns the number of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself.
+Checks if `e` and any entity in `table` are colliding, then returns the number of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself. For performance reasons, this function expects `table` to be an array.
 
 ---
 
