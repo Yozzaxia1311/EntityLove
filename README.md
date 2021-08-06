@@ -79,14 +79,14 @@ end
 
 **`.all`: readonly table**: table of all entities.
 
-**`.updates`: readonly table**: table of updated entities.
+**`.updates`: readonly table**: table of "non-static" entities. Read `:makeStatic(e)` documention for more details.
 
 **`.layers`: readonly table**: table of layers.
 
 - **`[index].layer`: readonly number**: Z index.
 - **`[index].data`: readonly table**: table of entities on this z index.
 
-**`.static`: readonly table**: table of static entities. Read `:makeStatic(e)` documention for more details.
+**`.static`: readonly table**: table of "static" entities. Read `:makeStatic(e)` documention for more details.
 
 ---
 
