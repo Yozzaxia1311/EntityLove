@@ -242,7 +242,7 @@ function entitySystem:init()
   self.readyQueue = {}
   self.hashes = {}
   self._HS =  {}
-  self.doSort = false
+  self._doSort = false
   self.inLoop = false
   self.drawCollision = false
   self._imgCache = {}
@@ -400,7 +400,7 @@ function entitySystem:collisionNumber(e, table, x, y, notme, func)
   return result
 end
 
-function entitySystem:sortLayers()
+function entitySystem:_sortLayers()
   local keys = {}
   local vals = {}
   
@@ -434,7 +434,7 @@ function entitySystem:add(e)
     
     if not done then
       self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
-      self.doSort = true
+      self._doSort = true
     end
     
     self.updates[#self.updates + 1] = e
@@ -464,10 +464,6 @@ function entitySystem:add(e)
   
   e.previousX = e.x
   e.previousY = e.y
-  
-  if e.calcGrav then
-    e:calcGrav()
-  end
   
   return e
 end
@@ -561,7 +557,7 @@ function entitySystem:revertFromStatic(e)
     
     if not done then
       self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
-      self.doSort = true
+      self._doSort = true
     end
     
     self.updates[#self.updates + 1] = e
@@ -662,7 +658,7 @@ function entitySystem:setLayer(e, l)
       
       if not done then
         self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
-        self.doSort = true
+        self._doSort = true
       end
     end
   end
@@ -915,7 +911,7 @@ function entitySystem:clear()
   self.removeQueue = {}
   self.hashes = {}
   self._HS = {}
-  self.doSort = false
+  self._doSort = false
   self.readyQueue = {}
   
   collectgarbage()
@@ -923,6 +919,11 @@ function entitySystem:clear()
 end
 
 function entitySystem:draw()
+  if self._doSort then
+    self._doSort = false
+    self:_sortLayers()
+  end
+  
   for _, layer in ipairs(self.layers) do
     for _, e in ipairs(layer.data) do
       if e.draw and e.canDraw then
@@ -986,11 +987,6 @@ function entitySystem:update(dt)
   for i=#self.addQueue, 1, -1 do
     self:addExisting(self.addQueue[i])
     self.addQueue[i] = nil
-  end
-  
-  if self.doSort then
-    self.doSort = false
-    self:sortLayers()
   end
 end
 
