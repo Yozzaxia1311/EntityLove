@@ -93,27 +93,11 @@ Adds entity into the system. Calls `e:added()`.
 
 ---
 
-**`:queueAdd(e)`**
-
-**`e`: table**
-
-Queues entity to be added outside the update loop.
-
----
-
 **`:remove(e)`**
 
 **`e`: table - entity**
 
 Removes entity from the system. Calls `e:removed()`, and removes the entity from all groups.
-
----
-
-**`:queueRemove(e)`**
-
-**`e`: table - entity**
-
-Queues entity to be removed outside the update loop.
 
 ---
 
