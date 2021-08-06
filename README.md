@@ -2,6 +2,8 @@
 
 EntityLove is a entity handling system with built in z-indexing, collision, and spatial hashing support.
 
+![img](https://github.com/Yozzaxia1311/EntityLove/blob/main/demo.gif)
+
 # How to Use
 
 First, create the system:
@@ -69,6 +71,23 @@ end
 
 **`.COL_CIRCLE`: enum = 3**: Circle collider type.
 
+**`.inLoop`: readonly boolean**: If currently in update loop.
+
+**`.drawCollision`: readonly boolean**: draws collision for active entities. Useful for debugging.
+
+**`.groups`: readonly table**: table of groups.
+
+**`.all`: readonly table**: table of all entities.
+
+**`.updates`: readonly table**: table of updated entities.
+
+**`.layers`: readonly table**: table of layers.
+
+- **`[index].layer`: readonly number**: Z index.
+- **`[index].data`: readonly table**: table of entities on this z index.
+
+**`.static`: readonly table**: table of static entities. Read `:makeStatic(e)` documention for more details.
+
 ---
 
 **`:update(dt)`**
@@ -87,7 +106,7 @@ Calls entity draw functions. Entities marked as "static" via `:makeStatic()` wil
 
 **`:add(e)`**
 
-**`e`: table**
+**`e`: table - entity**
 
 Adds entity into the system. Calls `e:added()`.
 
@@ -209,33 +228,33 @@ Retreives entities around `e`, with extents. Uses spatial hashes.
 
 ---
 
-**`:collision(e, other, ox, oy, notme)`**
+**`:collision(e, other, ox, oy)`**
 
-**`e`: table - entity, `other`: table - entity, `ox`: number, `oy`: number, `notme`: boolean**
+**`e`: table - entity, `other`: table - entity, `ox`: number, `oy`: number
 
 **returns boolean**
 
-Checks if `e` and `other` are colliding. `e` will be offset by `ox` and `oy`, if provided. If `notme`, then the function will return `false` if both entities are the same.
+Checks if `e` and `other` are colliding. `e` will be offset by `ox` and `oy`, if provided. This function will return `false` if both entities are the same.
 
 ---
 
-**`:collisionTable(e, table, ox, oy, notme)`**
+**`:collisionTable(e, table, ox, oy)`**
 
-**`e`: table - entity, `table`: table, `ox`: number, `oy`: number, `notme`: boolean**
+**`e`: table - entity, `table`: table, `ox`: number, `oy`: number
 
 **returns table**
 
-Checks if `e` and any entity in `table` are colliding, then returns a table of colliding entities. `e` will be offset by `ox` and `oy`, if provided. If `notme`, then the function will ignore checks between `e` and itself.
+Checks if `e` and any entity in `table` are colliding, then returns a table of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself.
 
 ---
 
-**`:collisionNumber(e, table, ox, oy, notme)`**
+**`:collisionNumber(e, table, ox, oy)`**
 
-**`e`: table - entity, `table`: table, `ox`: number, `oy`: number, `notme`: boolean**
+**`e`: table - entity, `table`: table, `ox`: number, `oy`: number
 
 **returns number**
 
-Checks if `e` and any entity in `table` are colliding, then returns the number of colliding entities. `e` will be offset by `ox` and `oy`, if provided. If `notme`, then the function will ignore checks between `e` and itself.
+Checks if `e` and any entity in `table` are colliding, then returns the number of colliding entities. `e` will be offset by `ox` and `oy`, if provided. This function will ignore checks between `e` and itself.
 
 ---
 
