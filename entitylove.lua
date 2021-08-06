@@ -610,6 +610,7 @@ function entitySystem:revertFromStatic(e)
     e.lastHashX2 = nil
     e.lastHashY2 = nil
     e._currentHashes = nil
+    e.system = self
     
     if not e.invisibleToHash then
       self:updateEntityHashWhenNeeded(e)
