@@ -331,6 +331,18 @@ Called when `self` has been added to an `entitySystem`.
 
 **`:ready()`**
 
-Called when every entities has already been added.
+Called after every entities has been added, and the system is about to iterate through its first update loop.
+
+---
+
+**`:removed()`**
+
+Called when `self` is removed from the system.
+
+---
+
+**`:staticToggled()`**
+
+Called when `self` is marked as "static" by the system. Read `entitySystem:makeStatic(e)` documention for more details.
 
 ---
