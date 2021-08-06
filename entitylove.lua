@@ -240,172 +240,75 @@ function entitySystem:init()
   self._imgCache = {}
 end
 
-function entitySystem:_getLayerData(l)
-  for i=1, #self.layers do
-    local v = self.layers[i]
+function entitySystem:update(dt)
+  while self.readyQueue[1] do
+    if self.readyQueue[1].ready then self.readyQueue[1]:ready() end
+    _remove(self.readyQueue, 1)
+  end
+  
+  self.inLoop = true
+  
+  for _, e in ipairs(self.updates) do
+    e.previousX = e.position.x
+    e.previousY = e.position.y
     
-    if v._layer == l then
-      return v
+    if e.beforeUpdate and e.canUpdate then
+      e:beforeUpdate(dt)
     end
+    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
+  end
+  
+  for _, e in ipairs(self.updates) do    
+    if e.update and e.canUpdate then
+      e:update(dt)
+    end
+    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
+  end
+  
+  for _, e in ipairs(self.updates) do
+    if e.afterUpdate and e.canUpdate then
+      e:afterUpdate(dt)
+    end
+    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
+    
+    e.justAddedIn = false
+  end
+  
+  self.inLoop = false
+  
+  for i=#self.removeQueue, 1, -1 do
+    self:remove(self.removeQueue[i])
+    self.removeQueue[i] = nil
+  end
+  
+  for i=#self.addQueue, 1, -1 do
+    self:addExisting(self.addQueue[i])
+    self.addQueue[i] = nil
   end
 end
 
-function entitySystem:updateHashForEntity(e)
-  self:_conform(e)
-  
-  if e.collisionShape and not e.invisibleToHash then
-    if not e._currentHashes then
-      e._currentHashes = {}
-    end
-    
-    local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
-    local hs = entitySystem.HASH_SIZE
-    local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-    local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
-    local emptyBefore = #e._currentHashes == 0
-    local check = {}
-    
-    for x = cx, cx2 do
-      for y = cy, cy2 do
-        if not self.hashes[x] then
-          self.hashes[x] = {[y] = {x = x, y = y, data = {e}, isRemoved = false}}
-          self._HS[x] = 1
-        elseif not self.hashes[x][y] then
-          self.hashes[x][y] = {x = x, y = y, data = {e}, isRemoved = false}
-          self._HS[x] = self._HS[x] + 1
-        elseif not _icontains(self.hashes[x][y].data, e) then
-          self.hashes[x][y].data[#self.hashes[x][y].data+1] = e
-          self.hashes[x][y].data[#self.hashes[x][y].data].isRemoved = false
-        end
-        
-        if not _icontains(e._currentHashes, self.hashes[x][y]) then
-          e._currentHashes[#e._currentHashes+1] = self.hashes[x][y]
-        end
-        
-        if self.hashes[x] and self.hashes[x][y] then
-          check[#check + 1] = self.hashes[x][y]
-        end
-      end
-    end
-    
-    if not emptyBefore then
-      for _, v in ipairs(e._currentHashes) do
-        if v.isRemoved or not _icontains(check, v) then
-          if not v.isRemoved then
-            _quickRemoveValueArray(v.data, e)
-            
-            if #v.data == 0 then
-              v.isRemoved = true
-              self.hashes[v.x][v.y] = nil
-              self._HS[v.x] = self._HS[v.x] - 1
-              
-              if self._HS[v.x] == 0 then
-                self.hashes[v.x] = nil
-                self._HS[v.x] = nil
-              end
-            end
-          end
-          
-          _quickRemoveValueArray(e._currentHashes, v)
-        end
-      end
-    end
-  elseif e._currentHashes and #e._currentHashes ~= 0 then -- If there's no collision, then remove from hash.
-    for i = 1, #e._currentHashes do
-      local v = e._currentHashes[i]
-      
-      if not v.isRemoved then
-        _quickRemoveValueArray(v.data, e)
-        
-        if #v.data == 0 then
-          v.isRemoved = true
-          self.hashes[v.x][v.y] = nil
-          self._HS[v.x] = self._HS[v.x] - 1
-          
-          if self._HS[v.x] == 0 then
-            self.hashes[v.x] = nil
-            self._HS[v.x] = nil
-          end
-        end
-      end
-    end
-    
-    e._currentHashes = nil
+function entitySystem:draw()
+  if self._doSort then
+    self._doSort = false
+    self:_sortLayers()
   end
-end
-
-function entitySystem:getEntitiesAt(xx, yy, ww, hh)
-  local result
-  local hs = entitySystem.HASH_SIZE
   
-  for x = _floor((xx - 2) / hs), _floor((xx + ww + 2) / hs) do
-    for y = _floor((yy - 2) / hs), _floor((yy + hh + 2) / hs) do
-      if self.hashes[x] and self.hashes[x][y] then
-        local hash = self.hashes[x][y]
-        
-        if not result and #hash.data > 0 then
-          result = {unpack(hash.data)}
-        else
-          for i = 1, #hash.data do
-            if not _icontains(result, hash.data[i]) then
-              result[#result+1] = hash.data[i]
-            end
-          end
-        end
+  for _, layer in ipairs(self.layers) do
+    for _, e in ipairs(layer.data) do
+      if e.draw and e.canDraw then
+        love.graphics.setColor(1, 1, 1, 1)
+        e:draw()
       end
     end
   end
   
-  return result or {}
-end
-
-function entitySystem:collision(e, other, x, y, notme)
-  self:_conform(e)
-  
-  return e and other and (not notme or other ~= e) and e.collisionShape and other.collisionShape and
-    _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
-end
-
-function entitySystem:collisionTable(e, table, x, y, notme, func)
-  self:_conform(e)
-  
-  local result = {}
-  if not table then return result end
-  for i=1, #table do
-    if self:collision(e, table[i], x, y, notme) and (func == nil or func(v)) then
-      result[#result+1] = table[i]
+  if self.drawCollision then
+    love.graphics.setColor(1, 1, 1, 1)
+    for _, layer in ipairs(self.layers) do
+      for _, e in ipairs(layer.data) do
+        self:drawCollision(e)
+      end
     end
-  end
-  return result
-end
-
-function entitySystem:collisionNumber(e, table, x, y, notme, func)
-  self:_conform(e)
-  
-  local result = 0
-  if not table then return result end
-  for i=1, #table do
-    if self:collision(e, table[i], x, y, notme) and (func == nil or func(t[i])) then
-      result = result + 1
-    end
-  end
-  return result
-end
-
-function entitySystem:_sortLayers()
-  local keys = {}
-  local vals = {}
-  
-  for k, v in pairs(self.layers) do
-    keys[#keys + 1] = v.layer
-    vals[v.layer] = v
-    self.layers[k] = nil
-  end
-  
-  table.sort(keys)
-  
-  for i=1, #keys do
-    self.layers[i] = vals[keys[i]]
   end
 end
 
@@ -467,32 +370,196 @@ function entitySystem:queueAdd(e)
   return self.addQueue[#self.addQueue]
 end
 
-function entitySystem:addToGroup(e, g)
+function entitySystem:remove(e)
   self:_conform(e)
   
-  if not self.groups[g] then
-    self.groups[g] = {}
+  e.isRemoved = true
+  if e.removed then e:removed() end
+  self:removeFromAllGroups(e)
+  
+  local al = self:_getLayerData(e._layer)
+  
+  if e.static then
+    _quickRemoveValueArray(self.static, e)
+  else
+    _quickRemoveValueArray(al.data, e)
+    _quickRemoveValueArray(self.updates, e)
   end
-  if not _icontains(self.groups[g], e) then
-    self.groups[g][#self.groups[g] + 1] = e
+  
+  if not e.static and #al.data == 0 then
+    _removeValueArray(self.layers, al)
+  end
+  
+  _quickRemoveValueArray(self.all, e)
+  _quickRemoveValueArray(self.readyQueue, e)
+  
+  if e._currentHashes then
+    for _, v in ipairs(e._currentHashes) do
+      if not v.isRemoved then
+        _quickRemoveValueArray(v.data, e)
+        
+        if #v.data == 0 then
+          v.isRemoved = true
+          self.hashes[v.x][v.y] = nil
+          self._HS[v.x] = self._HS[v.x] - 1
+          
+          if self._HS[v.x] == 0 then
+            self.hashes[v.x] = nil
+            self._HS[v.x] = nil
+          end
+        end
+      end
+    end
+  elseif e.static then
+    if e.collisionShape and e.staticX == e.position.x and e.staticY == e.position.y and
+      e.staticW == e.collisionShape.w and e.staticH == e.collisionShape.h then
+      local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
+      local hs = entitySystem.HASH_SIZE
+      local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
+      local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
+      
+      for x = cx, cx2 do
+        for y = cy, cy2 do
+          if self.hashes[x] and self.hashes[x][y] and not self.hashes[x][y].isRemoved then
+            _quickRemoveValueArray(self.hashes[x][y].data, e)
+            
+            if #self.hashes[x][y].data == 0 then
+              self.hashes[x][y].isRemoved = true
+              self.hashes[x][y] = nil
+              self._HS[x] = self._HS[x] - 1
+              
+              if self._HS[x] == 0 then
+                self.hashes[x] = nil
+                self._HS[x] = nil
+              end
+            end
+          end
+        end
+      end
+    else
+      for x, xt in pairs(self.hashes) do
+        for y, yt in pairs(xt) do
+          _quickRemoveValueArray(yt.data, e)
+          
+          if #yt.data == 0 and not yt.isRemoved then
+            yt.isRemoved = true
+            self.hashes[x][y] = nil
+            self._HS[x] = self._HS[x] - 1
+            
+            if self._HS[x] == 0 then
+              self.hashes[x] = nil
+              self._HS[x] = nil
+            end
+          end
+        end
+      end
+    end
+  end
+  
+  e.lastHashX = nil
+  e.lastHashY = nil
+  e.lastHashX2 = nil
+  e.lastHashY2 = nil
+  e._currentHashes = nil
+  e.system = nil
+  
+  e.isAdded = false
+  e.justAddedIn = false
+end
+
+function entitySystem:queueRemove(e)
+  if not e or e.isRemoved or _icontains(self.removeQueue, e) then return end
+  self.removeQueue[#self.removeQueue+1] = e
+end
+
+function entitySystem:clear()
+  for _, e in ipairs(self.all) do
+    self:remove(e)
+  end
+  
+  self.all = {}
+  self.layers = {}
+  self.updates = {}
+  self.groups = {}
+  self.static = {}
+  self.addQueue = {}
+  self.removeQueue = {}
+  self.hashes = {}
+  self._HS = {}
+  self._doSort = false
+  self.readyQueue = {}
+  
+  collectgarbage()
+  collectgarbage()
+end
+
+function entitySystem:setLayer(e, l)
+  self:_conform(e)
+  
+  if e._layer ~= l then
+    if not e.isAdded or e.static then
+      e._layer = l
+    else
+      local al = self:_getLayerData(e._layer)
+      
+      _quickRemoveValueArray(al.data, e)
+      
+      if #al.data == 0 then
+        _removeValueArray(self.layers, al)
+      end
+      
+      e._layer = l
+      
+      local done = false
+      
+      for i=1, #self.layers do
+        local v = self.layers[i]
+        
+        if v.layer == e._layer then
+          v.data[#v.data + 1] = e
+          done = true
+          break
+        end
+      end
+      
+      if not done then
+        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
+        self._doSort = true
+      end
+    end
   end
 end
 
-function entitySystem:removeFromGroup(e, g)
+function entitySystem:getLayer(e)
   self:_conform(e)
   
-  _quickRemoveValueArray(self.groups[g], e)
+  return e._layer
+end
+
+function entitySystem:_sortLayers()
+  local keys = {}
+  local vals = {}
   
-  if #self.groups[g] == 0 then
-    self.groups[g] = nil
+  for k, v in pairs(self.layers) do
+    keys[#keys + 1] = v.layer
+    vals[v.layer] = v
+    self.layers[k] = nil
+  end
+  
+  table.sort(keys)
+  
+  for i=1, #keys do
+    self.layers[i] = vals[keys[i]]
   end
 end
 
-function entitySystem:removeFromAllGroups(e)
-  self:_conform(e)
-  
-  for k, _ in pairs(self.groups) do
-    self:removeFromGroup(e, k)
+function entitySystem:_getLayerData(l)
+  for i=1, #self.layers do
+    local v = self.layers[i]
+    
+    if v._layer == l then
+      return v
+    end
   end
 end
 
@@ -622,47 +689,33 @@ function entitySystem:revertFromStatic(e)
   end
 end
 
-function entitySystem:setLayer(e, l)
+function entitySystem:addToGroup(e, g)
   self:_conform(e)
   
-  if e._layer ~= l then
-    if not e.isAdded or e.static then
-      e._layer = l
-    else
-      local al = self:_getLayerData(e._layer)
-      
-      _quickRemoveValueArray(al.data, e)
-      
-      if #al.data == 0 then
-        _removeValueArray(self.layers, al)
-      end
-      
-      e._layer = l
-      
-      local done = false
-      
-      for i=1, #self.layers do
-        local v = self.layers[i]
-        
-        if v.layer == e._layer then
-          v.data[#v.data + 1] = e
-          done = true
-          break
-        end
-      end
-      
-      if not done then
-        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
-        self._doSort = true
-      end
-    end
+  if not self.groups[g] then
+    self.groups[g] = {}
+  end
+  if not _icontains(self.groups[g], e) then
+    self.groups[g][#self.groups[g] + 1] = e
   end
 end
 
-function entitySystem:getLayer(e)
+function entitySystem:removeFromGroup(e, g)
   self:_conform(e)
   
-  return e._layer
+  _quickRemoveValueArray(self.groups[g], e)
+  
+  if #self.groups[g] == 0 then
+    self.groups[g] = nil
+  end
+end
+
+function entitySystem:removeFromAllGroups(e)
+  self:_conform(e)
+  
+  for k, _ in pairs(self.groups) do
+    self:removeFromGroup(e, k)
+  end
 end
 
 function entitySystem:inGroup(e, g)
@@ -728,6 +781,39 @@ function entitySystem:setCircleCollision(e, r)
   self:updateEntityHashWhenNeeded(e)
 end
 
+function entitySystem:collision(e, other, x, y, notme)
+  self:_conform(e)
+  
+  return e and other and (not notme or other ~= e) and e.collisionShape and other.collisionShape and
+    _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
+end
+
+function entitySystem:collisionTable(e, table, x, y, notme, func)
+  self:_conform(e)
+  
+  local result = {}
+  if not table then return result end
+  for i=1, #table do
+    if self:collision(e, table[i], x, y, notme) and (func == nil or func(v)) then
+      result[#result+1] = table[i]
+    end
+  end
+  return result
+end
+
+function entitySystem:collisionNumber(e, table, x, y, notme, func)
+  self:_conform(e)
+  
+  local result = 0
+  if not table then return result end
+  for i=1, #table do
+    if self:collision(e, table[i], x, y, notme) and (func == nil or func(t[i])) then
+      result = result + 1
+    end
+  end
+  return result
+end
+
 function entitySystem:drawCollision(e)
   self:_conform(e)
   
@@ -738,6 +824,90 @@ function entitySystem:drawCollision(e)
     e.collisionShape.image:draw(_floor(e.position.x), _floor(e.position.y))
   elseif e.collisionShape.type == entitySystem.COL_CIRCLE then
     love.graphics.circle("line", _floor(e.position.x), _floor(e.position.y), e.collisionShape.r)
+  end
+end
+
+function entitySystem:updateEntityHash(e)
+  self:_conform(e)
+  
+  if e.collisionShape and not e.invisibleToHash then
+    if not e._currentHashes then
+      e._currentHashes = {}
+    end
+    
+    local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
+    local hs = entitySystem.HASH_SIZE
+    local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
+    local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
+    local emptyBefore = #e._currentHashes == 0
+    local check = {}
+    
+    for x = cx, cx2 do
+      for y = cy, cy2 do
+        if not self.hashes[x] then
+          self.hashes[x] = {[y] = {x = x, y = y, data = {e}, isRemoved = false}}
+          self._HS[x] = 1
+        elseif not self.hashes[x][y] then
+          self.hashes[x][y] = {x = x, y = y, data = {e}, isRemoved = false}
+          self._HS[x] = self._HS[x] + 1
+        elseif not _icontains(self.hashes[x][y].data, e) then
+          self.hashes[x][y].data[#self.hashes[x][y].data+1] = e
+          self.hashes[x][y].data[#self.hashes[x][y].data].isRemoved = false
+        end
+        
+        if not _icontains(e._currentHashes, self.hashes[x][y]) then
+          e._currentHashes[#e._currentHashes+1] = self.hashes[x][y]
+        end
+        
+        if self.hashes[x] and self.hashes[x][y] then
+          check[#check + 1] = self.hashes[x][y]
+        end
+      end
+    end
+    
+    if not emptyBefore then
+      for _, v in ipairs(e._currentHashes) do
+        if v.isRemoved or not _icontains(check, v) then
+          if not v.isRemoved then
+            _quickRemoveValueArray(v.data, e)
+            
+            if #v.data == 0 then
+              v.isRemoved = true
+              self.hashes[v.x][v.y] = nil
+              self._HS[v.x] = self._HS[v.x] - 1
+              
+              if self._HS[v.x] == 0 then
+                self.hashes[v.x] = nil
+                self._HS[v.x] = nil
+              end
+            end
+          end
+          
+          _quickRemoveValueArray(e._currentHashes, v)
+        end
+      end
+    end
+  elseif e._currentHashes and #e._currentHashes ~= 0 then -- If there's no collision, then remove from hash.
+    for i = 1, #e._currentHashes do
+      local v = e._currentHashes[i]
+      
+      if not v.isRemoved then
+        _quickRemoveValueArray(v.data, e)
+        
+        if #v.data == 0 then
+          v.isRemoved = true
+          self.hashes[v.x][v.y] = nil
+          self._HS[v.x] = self._HS[v.x] - 1
+          
+          if self._HS[v.x] == 0 then
+            self.hashes[v.x] = nil
+            self._HS[v.x] = nil
+          end
+        end
+      end
+    end
+    
+    e._currentHashes = nil
   end
 end
 
@@ -756,9 +926,34 @@ function entitySystem:updateEntityHashWhenNeeded(e, doAnyway)
       e.lastHashX2 = cx2
       e.lastHashY2 = cy2
       
-      self:updateHashForEntity(e)
+      self:updateEntityHash(e)
     end
   end
+end
+
+function entitySystem:getEntitiesAt(xx, yy, ww, hh)
+  local result
+  local hs = entitySystem.HASH_SIZE
+  
+  for x = _floor((xx - 2) / hs), _floor((xx + ww + 2) / hs) do
+    for y = _floor((yy - 2) / hs), _floor((yy + hh + 2) / hs) do
+      if self.hashes[x] and self.hashes[x][y] then
+        local hash = self.hashes[x][y]
+        
+        if not result and #hash.data > 0 then
+          result = {unpack(hash.data)}
+        else
+          for i = 1, #hash.data do
+            if not _icontains(result, hash.data[i]) then
+              result[#result+1] = hash.data[i]
+            end
+          end
+        end
+      end
+    end
+  end
+  
+  return result or {}
 end
 
 function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, extentsUp, extentsDown)
@@ -789,202 +984,6 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
   return result
 end
 
-function entitySystem:remove(e)
-  self:_conform(e)
-  
-  e.isRemoved = true
-  if e.removed then e:removed() end
-  self:removeFromAllGroups(e)
-  
-  local al = self:_getLayerData(e._layer)
-  
-  if e.static then
-    _quickRemoveValueArray(self.static, e)
-  else
-    _quickRemoveValueArray(al.data, e)
-    _quickRemoveValueArray(self.updates, e)
-  end
-  
-  if not e.static and #al.data == 0 then
-    _removeValueArray(self.layers, al)
-  end
-  
-  _quickRemoveValueArray(self.all, e)
-  _quickRemoveValueArray(self.readyQueue, e)
-  
-  if e._currentHashes then
-    for _, v in ipairs(e._currentHashes) do
-      if not v.isRemoved then
-        _quickRemoveValueArray(v.data, e)
-        
-        if #v.data == 0 then
-          v.isRemoved = true
-          self.hashes[v.x][v.y] = nil
-          self._HS[v.x] = self._HS[v.x] - 1
-          
-          if self._HS[v.x] == 0 then
-            self.hashes[v.x] = nil
-            self._HS[v.x] = nil
-          end
-        end
-      end
-    end
-  elseif e.static then
-    if e.collisionShape and e.staticX == e.position.x and e.staticY == e.position.y and
-      e.staticW == e.collisionShape.w and e.staticH == e.collisionShape.h then
-      local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
-      local hs = entitySystem.HASH_SIZE
-      local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-      local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
-      
-      for x = cx, cx2 do
-        for y = cy, cy2 do
-          if self.hashes[x] and self.hashes[x][y] and not self.hashes[x][y].isRemoved then
-            _quickRemoveValueArray(self.hashes[x][y].data, e)
-            
-            if #self.hashes[x][y].data == 0 then
-              self.hashes[x][y].isRemoved = true
-              self.hashes[x][y] = nil
-              self._HS[x] = self._HS[x] - 1
-              
-              if self._HS[x] == 0 then
-                self.hashes[x] = nil
-                self._HS[x] = nil
-              end
-            end
-          end
-        end
-      end
-    else
-      for x, xt in pairs(self.hashes) do
-        for y, yt in pairs(xt) do
-          _quickRemoveValueArray(yt.data, e)
-          
-          if #yt.data == 0 and not yt.isRemoved then
-            yt.isRemoved = true
-            self.hashes[x][y] = nil
-            self._HS[x] = self._HS[x] - 1
-            
-            if self._HS[x] == 0 then
-              self.hashes[x] = nil
-              self._HS[x] = nil
-            end
-          end
-        end
-      end
-    end
-  end
-  
-  e.lastHashX = nil
-  e.lastHashY = nil
-  e.lastHashX2 = nil
-  e.lastHashY2 = nil
-  e._currentHashes = nil
-  e.system = nil
-  
-  e.isAdded = false
-  e.justAddedIn = false
-end
-
-function entitySystem:queueRemove(e)
-  if not e or e.isRemoved or _icontains(self.removeQueue, e) then return end
-  self.removeQueue[#self.removeQueue+1] = e
-end
-
-function entitySystem:clear()
-  for _, e in ipairs(self.all) do
-    self:remove(e)
-  end
-  
-  self.all = {}
-  self.layers = {}
-  self.updates = {}
-  self.groups = {}
-  self.static = {}
-  self.addQueue = {}
-  self.removeQueue = {}
-  self.hashes = {}
-  self._HS = {}
-  self._doSort = false
-  self.readyQueue = {}
-  
-  collectgarbage()
-  collectgarbage()
-end
-
-function entitySystem:draw()
-  if self._doSort then
-    self._doSort = false
-    self:_sortLayers()
-  end
-  
-  for _, layer in ipairs(self.layers) do
-    for _, e in ipairs(layer.data) do
-      if e.draw and e.canDraw then
-        love.graphics.setColor(1, 1, 1, 1)
-        e:draw()
-      end
-    end
-  end
-  
-  if self.drawCollision then
-    love.graphics.setColor(1, 1, 1, 1)
-    for _, layer in ipairs(self.layers) do
-      for _, e in ipairs(layer.data) do
-        self:drawCollision(e)
-      end
-    end
-  end
-end
-
-function entitySystem:update(dt)
-  while self.readyQueue[1] do
-    if self.readyQueue[1].ready then self.readyQueue[1]:ready() end
-    _remove(self.readyQueue, 1)
-  end
-  
-  self.inLoop = true
-  
-  for _, e in ipairs(self.updates) do
-    e.previousX = e.position.x
-    e.previousY = e.position.y
-    
-    if e.beforeUpdate and e.canUpdate then
-      e:beforeUpdate(dt)
-    end
-    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
-  end
-  
-  for _, e in ipairs(self.updates) do    
-    if e.update and e.canUpdate then
-      e:update(dt)
-    end
-    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
-  end
-  
-  for _, e in ipairs(self.updates) do
-    if e.afterUpdate and e.canUpdate then
-      e:afterUpdate(dt)
-    end
-    if not e.invisibleToHash then self:updateEntityHashWhenNeeded(e) end
-    
-    e.justAddedIn = false
-  end
-  
-  self.inLoop = false
-  
-  for i=#self.removeQueue, 1, -1 do
-    self:remove(self.removeQueue[i])
-    self.removeQueue[i] = nil
-  end
-  
-  for i=#self.addQueue, 1, -1 do
-    self:addExisting(self.addQueue[i])
-    self.addQueue[i] = nil
-  end
-end
-
--- This conforms a table to be compatible with EntityLove.
 function entitySystem:_conform(t)
   if not t._entitySystemConformed then
     t._layer = t._layer or 1
