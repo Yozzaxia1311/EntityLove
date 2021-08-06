@@ -14,12 +14,10 @@ Then, create the entity using your class implementation of choice (or an empty t
 local entity = class:extend()
 
 function entity:new(x, y)
-  system:conform(self) -- Will add everything needed by EntityLove!
-  
   -- Manipulate all the EntityLove bits to your liking!
-  self.x = x
-  self.y = y
-  system:setRectangleCollision(self, 32, 32) -- Spatial hashing is enable by default.
+  self.position.x = x -- EntityLove uses `self.position` for collision and spatial hashing.
+  self.position.y = y
+  system:setRectangleCollision(self, 32, 32)
   system:addToGroup(self, "myGroup") -- Retrieve group table using `system.groups["groupName"]`.
                                      -- Entities will be removed from all groups when `system:remove(e)` is used.
 end
@@ -53,9 +51,6 @@ end
 
 # Documentation
 ## `entitySystem`
-### `:conform(t)`
-`t`: table - Converts table to be usable by an `entitySystem`.
-
 ### `:add(e)`
 `e`: table - Adds entity into the system. Calls `e:added()`.
 

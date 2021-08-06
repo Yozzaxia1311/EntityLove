@@ -88,11 +88,6 @@ local function _quickRemoveValueArray(t, va)
   end
 end
 
-local function _sanityCheck(e)
-  assert(type(e) == "table", "Provided value is not a table.")
-  assert(e._entitySystemConformed, "Table is not conformed to be an entity! Use entitySystem:conform(e).")
-end
-
 -- Collision.
 
 local function _rectOverlapsRect(x1, y1, w1, h1, x2, y2, w2, h2)
@@ -125,9 +120,9 @@ local function _circleOverlapsRect(x1, y1, r1, x2, y2, w2, h2)
     _pointOverlapsCircle(x2, y2 + h2, x1, y1, r1)
 end
 
-local function _imageOverlapsRect(x, y, w, h, data, x2, y2, w2, h2)
-  if _rectOverlapsRect(x, y, w, h, x2, y2, w2, h2) then
-    local neww, newh = w-1, h-1
+local function _imageOverlapsRect(x, y, data, x2, y2, w2, h2)
+  if _rectOverlapsRect(x, y, data:getWidth(), data:getHeight(), x2, y2, w2, h2) then
+    local neww, newh = data:getWidth()-1, data:getHeight()-1
     for xi=_clamp(_floor(x2-x), 0, neww), _clamp(_ceil(x2-x)+w2, 0, neww) do
       for yi=_clamp(_floor(y2-y), 0, newh), _clamp(_ceil(y2-y)+h2, 0, newh) do
         local _, _, _, a = data:getPixel(xi, yi)
@@ -140,9 +135,9 @@ local function _imageOverlapsRect(x, y, w, h, data, x2, y2, w2, h2)
   return false
 end
 
-local function _imageOverlapsCircle(x, y, w, h, data, x2, y2, r2)
-  if _circleOverlapsRect(x2, y2, r2, x, y, w, h) then
-    local neww, newh = w-1, h-1
+local function _imageOverlapsCircle(x, y, data, x2, y2, r2)
+  if _circleOverlapsRect(x2, y2, r2, x, y, data:getWidth(), data:getHeight()) then
+    local neww, newh = data:getWidth()-1, data:getHeight()-1
     
     for xi=_clamp(_floor(x2-x)-r2, 0, neww), _clamp(_ceil(x2-x)+r2, 0, neww) do
       for yi=_clamp(_floor(y2-y)-r2, 0, newh), _clamp(_ceil(y2-y)+r2, 0, newh) do
@@ -156,10 +151,10 @@ local function _imageOverlapsCircle(x, y, w, h, data, x2, y2, r2)
   return false
 end
 
-local function _imageOverlapsImage(x, y, w, h, data, x2, y2, w2, h2, data2)
-  if _rectOverlapsRect(x, y, w, h, x2, y2, w2, h2) then
-    local neww, newh = w-1, h-1
-    local neww2, newh2 = w2-1, h2-1
+local function _imageOverlapsImage(x, y, data, x2, y2, data2)
+  if _rectOverlapsRect(x, y, data:getWidth(), data:getHeight(), x2, y2, data2:getWidth(), data2:getHeight()) then
+    local neww, newh = data:getWidth()-1, data:getHeight()-1
+    local neww2, newh2 = data2:getWidth()-1, data2:getHeight()-1
     
     for xi=_clamp(_floor(x2-x), 0, neww), _clamp(_ceil(x2-x)+w2, 0, neww) do
       for yi=_clamp(_floor(y2-y), 0, newh), _clamp(_ceil(y2-y)+h2, 0, newh) do
@@ -182,49 +177,46 @@ end
 
 local _entityCollision = {
     {
-      function(self, e, x, y)
-          return _rectOverlapsRect(self.x + (x or 0), self.y + (y or 0),
-            self.collisionShape.w, self.collisionShape.h,
-            e.x, e.y, e.collisionShape.w, e.collisionShape.h)
+      function(e, other, x, y)
+          return _rectOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0),
+            e.collisionShape.w, e.collisionShape.h,
+            other.position.x, other.position.y, other.collisionShape.w, other.collisionShape.h)
         end,
-      function(self, e, x, y)
-          return _imageOverlapsRect(e.x, e.y, e.collisionShape.w, e.collisionShape.h, e.collisionShape.data,
-            self.x + (x or 0), self.y + (y or 0), self.collisionShape.w, self.collisionShape.h)
+      function(e, other, x, y)
+          return _imageOverlapsRect(other.position.x, other.position.y, other.collisionShape.data,
+            e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.w, e.collisionShape.h)
         end,
-      function(self, e, x, y)
-          return _circleOverlapsRect(e.x, e.y, e.collisionShape.r,
-            self.x + (x or 0), self.y + (y or 0), self.collisionShape.w, self.collisionShape.h)
+      function(e, other, x, y)
+          return _circleOverlapsRect(other.position.x, other.position.y, other.collisionShape.r,
+            e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.w, e.collisionShape.h)
         end
     },
     {
-      function(self, e, x, y)
-          return _imageOverlapsRect(self.x + (x or 0), self.y + (y or 0),
-            self.collisionShape.w, self.collisionShape.h, self.collisionShape.data,
-            e.x, e.y, e.collisionShape.w, e.collisionShape.h)
+      function(e, other, x, y)
+          return _imageOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+            other.position.x, other.position.y, other.collisionShape.w, other.collisionShape.h)
         end,
-      function(self, e, x, y)
-          return _imageOverlapsImage(self.x + (x or 0), self.y + (y or 0),
-            self.collisionShape.w, self.collisionShape.h, self.collisionShape.data,
-            e.x, e.y, e.collisionShape.w, e.collisionShape.h, e.collisionShape.data)
+      function(e, other, x, y)
+          return _imageOverlapsImage(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+            other.position.x, other.position.y, other.collisionShape.data)
         end,
-      function(self, e, x, y)
-          return _imageOverlapsCircle(self.x + (x or 0), self.y + (y or 0),
-            self.collisionShape.w, self.collisionShape.h, self.collisionShape.data,
-            e.x, e.y, e.collisionShape.r)
+      function(e, other, x, y)
+          return _imageOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+            other.position.x, other.position.y, other.collisionShape.r)
         end
     },
     {
-      function(self, e, x, y)
-          return _circleOverlapsRect(self.x + (x or 0), self.y + (y or 0), self.collisionShape.r,
-            e.x, e.y, e.collisionShape.w, e.collisionShape.h)
+      function(e, other, x, y)
+          return _circleOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.r,
+            other.position.x, other.position.y, other.collisionShape.w, other.collisionShape.h)
         end,
-      function(self, e, x, y)
-          return _imageOverlapsCircle(e.x, e.y, e.collisionShape.w, e.collisionShape.h, e.collisionShape.data,
-            self.x + (x or 0), self.y + (y or 0), self.collisionShape.r)
+      function(e, other, x, y)
+          return _imageOverlapsCircle(other.position.x, other.position.y, other.collisionShape.data,
+            e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.r)
         end,
-      function(self, e, x, y)
-          return _circleOverlapsCircle(self.x + (x or 0), self.y + (y or 0), self.collisionShape.r,
-            e.x, e.y, e.collisionShape.r)
+      function(e, other, x, y)
+          return _circleOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.r,
+            other.position.x, other.position.y, other.collisionShape.r)
         end
     }
   }
@@ -259,14 +251,14 @@ function entitySystem:_getLayerData(l)
 end
 
 function entitySystem:updateHashForEntity(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if e.collisionShape and not e.invisibleToHash then
     if not e.currentHashes then
       e.currentHashes = {}
     end
     
-    local xx, yy, ww, hh = e.x, e.y, e.collisionShape.w, e.collisionShape.h
+    local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
     local hs = entitySystem.HASH_SIZE
     local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
     local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
@@ -368,14 +360,14 @@ function entitySystem:getEntitiesAt(xx, yy, ww, hh)
 end
 
 function entitySystem:collision(e, other, x, y, notme)
-  _sanityCheck(e)
+  self:_conform(e)
   
   return e and other and (not notme or other ~= e) and e.collisionShape and other.collisionShape and
     _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
 end
 
 function entitySystem:collisionTable(e, table, x, y, notme, func)
-  _sanityCheck(e)
+  self:_conform(e)
   
   local result = {}
   if not table then return result end
@@ -388,7 +380,7 @@ function entitySystem:collisionTable(e, table, x, y, notme, func)
 end
 
 function entitySystem:collisionNumber(e, table, x, y, notme, func)
-  _sanityCheck(e)
+  self:_conform(e)
   
   local result = 0
   if not table then return result end
@@ -418,7 +410,7 @@ function entitySystem:_sortLayers()
 end
 
 function entitySystem:add(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if not e.static then
     local done = false
@@ -462,21 +454,21 @@ function entitySystem:add(e)
     self.readyQueue[#self.readyQueue + 1] = e
   end
   
-  e.previousX = e.x
-  e.previousY = e.y
+  e.previousX = e.position.x
+  e.previousY = e.position.y
   
   return e
 end
 
 function entitySystem:queueAdd(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   self.addQueue[#self.addQueue + 1] = e
   return self.addQueue[#self.addQueue]
 end
 
 function entitySystem:addToGroup(e, g)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if not self.groups[g] then
     self.groups[g] = {}
@@ -487,7 +479,7 @@ function entitySystem:addToGroup(e, g)
 end
 
 function entitySystem:removeFromGroup(e, g)
-  _sanityCheck(e)
+  self:_conform(e)
   
   _quickRemoveValueArray(self.groups[g], e)
   
@@ -497,7 +489,7 @@ function entitySystem:removeFromGroup(e, g)
 end
 
 function entitySystem:removeFromAllGroups(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   for k, _ in pairs(self.groups) do
     self:removeFromGroup(e, k)
@@ -505,7 +497,7 @@ function entitySystem:removeFromAllGroups(e)
 end
 
 function entitySystem:makeStatic(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if not e.static then
     _quickRemoveValueArray(self.updates, e)
@@ -521,8 +513,8 @@ function entitySystem:makeStatic(e)
     self.static[#self.static + 1] = e
     
     e.static = true
-    e.staticX = e.x
-    e.staticY = e.y
+    e.staticX = e.position.x
+    e.staticY = e.position.y
     if e.collisionShape then
       e.staticW = e.collisionShape.w
       e.staticH = e.collisionShape.h
@@ -539,7 +531,7 @@ function entitySystem:makeStatic(e)
 end
 
 function entitySystem:revertFromStatic(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if e.static then
     _quickRemoveValueArray(self.static, e)
@@ -562,9 +554,9 @@ function entitySystem:revertFromStatic(e)
     
     self.updates[#self.updates + 1] = e
     
-    if e.collisionShape and e.staticX == e.x and e.staticY == e.y and
+    if e.collisionShape and e.staticX == e.position.x and e.staticY == e.position.y and
       e.staticW == e.collisionShape.w and e.staticH == e.collisionShape.h then
-      local xx, yy, ww, hh = e.x, e.y, e.collisionShape.w, e.collisionShape.h
+      local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
       local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
@@ -628,7 +620,7 @@ function entitySystem:revertFromStatic(e)
 end
 
 function entitySystem:setLayer(e, l)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if e._layer ~= l then
     if not e.isAdded or e.static then
@@ -665,19 +657,19 @@ function entitySystem:setLayer(e, l)
 end
 
 function entitySystem:getLayer(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   return e._layer
 end
 
 function entitySystem:inGroup(e, g)
-  _sanityCheck(e)
+  self:_conform(e)
   
   return _icontains(self.groups, g)
 end
 
 function entitySystem:setRectangleCollision(e, w, h)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if not e.collisionShape then
     e.collisionShape = {}
@@ -694,7 +686,7 @@ function entitySystem:setRectangleCollision(e, w, h)
 end
 
 function entitySystem:setImageCollision(e, data)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if not e.collisionShape then
     e.collisionShape = {}
@@ -717,7 +709,7 @@ function entitySystem:setImageCollision(e, data)
 end
 
 function entitySystem:setCircleCollision(e, r)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if not e.collisionShape then
     e.collisionShape = {}
@@ -734,23 +726,23 @@ function entitySystem:setCircleCollision(e, r)
 end
 
 function entitySystem:drawCollision(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if e.collisionShape.type == entitySystem.COL_RECT then
-    love.graphics.rectangle("line", _floor(e.x), _floor(e.y),
+    love.graphics.rectangle("line", _floor(e.position.x), _floor(e.position.y),
       e.collisionShape.w, e.collisionShape.h)
   elseif e.collisionShape.type == entitySystem.COL_IMAGE then
-    e.collisionShape.image:draw(_floor(e.x), _floor(e.y))
+    e.collisionShape.image:draw(_floor(e.position.x), _floor(e.position.y))
   elseif e.collisionShape.type == entitySystem.COL_CIRCLE then
-    love.graphics.circle("line", _floor(e.x), _floor(e.y), e.collisionShape.r)
+    love.graphics.circle("line", _floor(e.position.x), _floor(e.position.y), e.collisionShape.r)
   end
 end
 
 function entitySystem:updateEntityHashWhenNeeded(e, doAnyway)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if (doAnyway or e.isAdded) and e.collisionShape then
-    local xx, yy, ww, hh = e.x, e.y, e.collisionShape.w, e.collisionShape.h
+    local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
     local hs = entitySystem.HASH_SIZE
     local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
     local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
@@ -767,7 +759,7 @@ function entitySystem:updateEntityHashWhenNeeded(e, doAnyway)
 end
 
 function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, extentsUp, extentsDown)
-  _sanityCheck(e)
+  self:_conform(e)
   assert(extentsLeft < 0 or extentsRight < 0 or extentsUp < 0 or extentsDown < 0, "Extents must be positive!")
   
   if e.invisibleToHash then
@@ -775,7 +767,7 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
   end
   
   if extentsLeft or extentsRight or extentsUp or extentsDown or not e.currentHashes then
-    return self:getEntitiesAt(e.x - extentsLeft, e.y + extentsUp, extentsLeft + extentsRight, extentsUp + extentsDown)
+    return self:getEntitiesAt(e.position.x - extentsLeft, e.position.y + extentsUp, extentsLeft + extentsRight, extentsUp + extentsDown)
   end
   
   self:updateEntityHashWhenNeeded(e)
@@ -794,7 +786,7 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
 end
 
 function entitySystem:remove(e)
-  _sanityCheck(e)
+  self:_conform(e)
   
   if e.isRemoved then return end
   
@@ -836,9 +828,9 @@ function entitySystem:remove(e)
       end
     end
   elseif e.static then
-    if e.collisionShape and e.staticX == e.x and e.staticY == e.y and
+    if e.collisionShape and e.staticX == e.position.x and e.staticY == e.position.y and
       e.staticW == e.collisionShape.w and e.staticH == e.collisionShape.h then
-      local xx, yy, ww, hh = e.x, e.y, e.collisionShape.w, e.collisionShape.h
+      local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
       local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
@@ -952,8 +944,8 @@ function entitySystem:update(dt)
   self.inLoop = true
   
   for _, e in ipairs(self.updates) do
-    e.previousX = e.x
-    e.previousY = e.y
+    e.previousX = e.position.x
+    e.previousY = e.position.y
     
     if e.beforeUpdate and e.canUpdate then
       e:beforeUpdate(dt)
@@ -991,24 +983,27 @@ function entitySystem:update(dt)
 end
 
 -- This conforms a table to be compatible with EntityLove.
-function entitySystem:conform(t)
-  assert(type(t) == "table", "Provided value is not a table.")
-  
+function entitySystem:_conform(t)
   if not t._entitySystemConformed then
     t._layer = t._layer or 1
     t.isRemoved = true
     t.isAdded = false
     t.currentHashes = nil
-    t.x = t.x or 0
-    t.y = t.y or 0
+    if t.position == nil then
+      t.position = {}
+    end
+    t.position.x = t.position.x or 0
+    t.position.y = t.position.y or 0
     if t.canUpdate == nil then
       t.canUpdate = true
     end
     if t.canDraw == nil then
       t.canDraw = true
     end
+    if t.invisibleToHash == nil then
+      t.invisibleToHash = false
+    end
     t.system = self
-    t.invisibleToHash = false
     t._entitySystemConformed = true
   end
   
