@@ -230,7 +230,7 @@ Retreives entities around `e`, with extents. Uses spatial hashes.
 
 **`:collision(e, other, ox, oy)`**
 
-**`e`: table - entity, `other`: table - entity, `ox`: number, `oy`: number
+**`e`: table - entity, `other`: table - entity, `ox`: number, `oy`: number**
 
 **returns boolean**
 
@@ -240,7 +240,7 @@ Checks if `e` and `other` are colliding. `e` will be offset by `ox` and `oy`, if
 
 **`:collisionTable(e, table, ox, oy)`**
 
-**`e`: table - entity, `table`: table, `ox`: number, `oy`: number
+**`e`: table - entity, `table`: table, `ox`: number, `oy`: number**
 
 **returns table**
 
@@ -250,7 +250,7 @@ Checks if `e` and any entity in `table` are colliding, then returns a table of c
 
 **`:collisionNumber(e, table, ox, oy)`**
 
-**`e`: table - entity, `table`: table, `ox`: number, `oy`: number
+**`e`: table - entity, `table`: table, `ox`: number, `oy`: number**
 
 **returns number**
 
