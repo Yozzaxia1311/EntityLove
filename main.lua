@@ -1,18 +1,20 @@
 local system = require("entitylove")
 
 function createPlayer(x, y)
-  local player = {position = {}}
+  local player = {}
   
+  player.position = {}
   player.position.x = x
   player.position.y = y
   system:setRectangleCollision(player, 32, 32)
   
   player.colorTimer = 0
   
-  -- EntityLove calls special event functions if it's in the table. Ex: :draw(), :update(), :ready(), :added(), :removed()...
-  function player:draw() -- Draw color is auto set to white.
+  function player:draw()
     love.graphics.setColor(((self.colorTimer + self.position.x) % 255) / 255,
-      ((self.colorTimer + self.position.y) % 255) / 255, ((self.colorTimer + self.position.x + self.position.y) % 255) / 255, 1)
+      ((self.colorTimer + self.position.y) % 255) / 255,
+      ((self.colorTimer + self.position.x + self.position.y) % 255) / 255,
+      1)
     love.graphics.rectangle("fill", self.position.x, self.position.y, self.collisionShape.w, self.collisionShape.h)
   end
   
