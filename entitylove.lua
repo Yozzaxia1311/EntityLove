@@ -767,7 +767,8 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
   end
   
   if extentsLeft or extentsRight or extentsUp or extentsDown or not e.currentHashes then
-    return self:getEntitiesAt(e.position.x - extentsLeft, e.position.y + extentsUp, extentsLeft + extentsRight, extentsUp + extentsDown)
+    return self:getEntitiesAt(e.position.x - extentsLeft, e.position.y + extentsUp,
+      extentsLeft + extentsRight, extentsUp + extentsDown)
   end
   
   self:updateEntityHashWhenNeeded(e)
