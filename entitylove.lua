@@ -433,11 +433,6 @@ end
 function entitySystem:remove(e)
   self:_conform(e)
   
-  if #self._updateHoles > 100 then
-    self:_removeHoles(self._updates)
-    self._updateHoles = {}
-  end
-  
   e.isRemoved = true
   if e.removed then e:removed() end
   self:removeFromAllGroups(e)
@@ -448,11 +443,6 @@ function entitySystem:remove(e)
     _quickRemoveValueArray(self.static, e)
   else
     if al then
-      if #al.holes > 100 then
-        self:_removeHoles(al.holes)
-        al.holes = {}
-      end
-      
       local i = _findIndexArray(al.data, e)
       if i then
         al.data[i] = -1
@@ -583,11 +573,6 @@ function entitySystem:setLayer(e, l)
       local al = self:_getLayerData(e._layer)
       
       if al then
-        if #al.holes > 100 then
-          self:_removeHoles(al.holes)
-          al.holes = {}
-        end
-        
         local i = _findIndexArray(al.data, e)
         if i then
           al.data[i] = -1
@@ -664,11 +649,6 @@ function entitySystem:makeStatic(e)
   self:_conform(e)
   
   if not e.static and not e.isRemoved then
-    if #self._updateHoles > 100 then
-      self:_removeHoles(self._updates)
-      self._updateHoles = {}
-    end
-    
     local i = _findIndexArray(self._updates, e)
     if i then
       self._updates[i] = -1
@@ -678,11 +658,6 @@ function entitySystem:makeStatic(e)
     local al = self:_getLayerData(e._layer)
     
     if al then
-      if #al.holes > 100 then
-        self:_removeHoles(al.holes)
-        al.holes = {}
-      end
-      
       local i = _findIndexArray(al.data, e)
       if i then
         al.data[i] = -1
