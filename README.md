@@ -165,7 +165,7 @@ Sets `e.collisionShape` to be a circle of radius `r`.
 
 **`x`: number, `y`: number, `w`: number, `h`: number**
 
-Retreives entities in a rectangle defined by `x`, `y`, `w`, nd `h`. Uses spatial hashes.
+Retreives entities in a rectangle defined by `x`, `y`, `w`, and `h`. Uses spatial hashes.
 
 
 ---
