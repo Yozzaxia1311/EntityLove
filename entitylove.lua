@@ -469,7 +469,7 @@ end
 
 function entitySystem:queueRemove(e)
   if not e or e.isRemoved or _icontains(self.removeQueue, e) then return end
-  self.removeQueue[#self.removeQueue+1] = e
+  self.removeQueue[#self.removeQueue + 1] = e
 end
 
 function entitySystem:clear()
