@@ -22,7 +22,6 @@ function createParticle(x, y, speed)
   particle.variation = love.math.random(32, 250)
   
   function particle:draw()
-    -- The magic functions.
     if system:collisionNumber(self, system:getSurroundingEntities(self)) > 0 then
       love.graphics.setColor(1, 0, 0, 1)
     else
@@ -51,7 +50,24 @@ function createParticle(x, y, speed)
 end
 
 local timer = 0
-local timer2 = 0
+local timerEntityCount = 0
+local static = false
+
+function love.keypressed(k)
+  if k == "space" then
+    static = not static
+    
+    if static then
+      for i = 1, #system.all do
+        system:makeStatic(system.all[i])
+      end
+    else
+      for i = 1, #system.all do
+        system:revertFromStatic(system.all[i])
+      end
+    end
+  end
+end
 
 function love.update(dt)
   local spawn = false
@@ -62,20 +78,22 @@ function love.update(dt)
     spawn = true
   end
   
-  if spawn then
+  if spawn and not static then
     system:add(createParticle(-14, 250, 100))
     system:add(createParticle(love.graphics.getWidth() - 2, 330, -100))
   end
   
   system:update(dt)
   
-  timer2 = timer2 + dt
-  if timer2 > 1 then
-    timer2 = 0
+  timerEntityCount = timerEntityCount + dt
+  if timerEntityCount > 1 and not static then
+    timerEntityCount = 0
     print("Entities", #system.all)
   end
 end
 
 function love.draw()
   system:draw()
+  
+  love.graphics.print("Press Space to toggle static.")
 end

@@ -256,11 +256,19 @@ Checks if `e` and any entity in `table` are colliding, then returns the number o
 
 ---
 
+**`:updateEntityHash(e)`**
+
+**`e`: table - entity**
+
+Manually updates the spatial hash for `e`.
+
+---
+
 **`:makeStatic(e)`**
 
 **`e`: table - entity**
 
-Marks `e` as "static", keeping it accounted for in the system, but removing it from the update and draw loops until made "unstatic" via `revertFromStatic`. Useful for unmoving objects in high abundance, such as solids. This function calls `e:staticToggled()`.
+Marks `e` as "static", removing it from the update and draw loop, but still keeping it inside its groups and spatial hash. Useful for unmoving objects in high abundance, such as solids. If you need to move a static object and check its collision, then the spatial hash needs be updated manually using `:updateEntityHash(e)`. This function calls `e:staticToggled()`.
 
 ---
 
@@ -296,6 +304,8 @@ Reverts "static" state from `e`, making it a normal entity. This function calls 
 **`.canUpdate`: boolean**: If the entity should be updated. The system will still iterate over it, but will not call `self:update(dt)`.
 
 **`.canDraw`: boolean**: If the entity should be drawn. The system will still iterate over it, but will not call `self:draw()`.
+
+**`.invisibleToHash`: readonly boolean**: If the entity is processed in the spatial hashing system.
 
 **`.system`: readonly table**: Reference variable for the `entitySystem` this entity is in.
 
