@@ -178,6 +178,26 @@ Gets z-index of entity.
 
 ---
 
+**`:pos(e, x, y)`**
+
+**`e`: table - entity, `x`: number, `y`: number**
+
+Sets position of `e` and updates its spatial hash.
+
+
+---
+
+**`:move(e, x, y, solid, resolverX, resolverY)`**
+
+**`e`: table - entity, `x`: number, `y`: number, `solids`: table, `resolverX`: function(against: table), `resolverY`: function(against: table)**
+
+**returns boolean, boolean**
+
+Moves position of `e` and updates its spatial hash. `e` will not move into any entity in `solids`, and may use a custom collision resolver `resolveX` and `resolveY`, where `against` is a table of valid solid entities. Returns if solid shift happened along X or Y axis.
+
+
+---
+
 **`:setRectangleCollision(e, w, h)`**
 
 **`e`: table - entity, `w`: number, `h`: number**
@@ -286,12 +306,12 @@ Reverts "static" state from `e`, making it a normal entity. This function calls 
 
 **`.isAdded`: readonly boolean**: if `self` is added to the system.
 
-**`.position`: table**: position used by EntityLove. Can be conveniently set as a 2D vector.
+**`.position`: table**: position used by EntityLove. Can be conveniently set as a 2D vector. Note: manually changing this variable will not update its spatial hash. To set the position and update the hash, use `entitySystem:pos(e, x, y)`.
 
 - **`.x`: number**: X axis.
 - **`.y`: number**: Y axis.
 
-**`.collisionShape`: readonly table**: collision used by EntityLove.
+**`.collisionShape`: readonly table**: collision used by EntityLove. Note: manually changing this variable will not update its spatial hash. To set the collider and update the hash, use one of `entitySystem`'s collision setters.
 
 - **`.w`: readonly number**: Width of collider.
 - **`.h`: readonly number**: Height of collider.

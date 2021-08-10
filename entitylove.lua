@@ -14,7 +14,15 @@ local _ceil = math.ceil
 local _sqrt = math.sqrt
 local _min = math.min
 local _max = math.max
+local _sin = math.sin
+local _cos = math.cos
+local _atan2 = math.atan2
+local _abs = math.abs
 local _remove = table.remove
+
+local function _lerp(a, b, t)
+  return (1 - t) * a + t * b
+end
 
 local function _dist2d(x, y, x2, y2)
   return _sqrt(((x - x2) ^ 2) + ((y - y2) ^ 2))
@@ -41,26 +49,6 @@ local function _icontains(t, va)
     end
   end
   
-  return false
-end
-
-local function _intersects(t, t2, fully)
-  if fully then
-    for _, v in pairs(t) do
-      if not _contains(t2, v) then
-        return false
-      end
-    end
-    return true
-  else
-    for _, v in pairs(t) do
-      for _, v2 in pairs(t2) do
-        if v == v2 then
-          return true
-        end
-      end
-    end
-  end
   return false
 end
 
@@ -273,7 +261,6 @@ function entitySystem:update(dt)
       if e.beforeUpdate and e.canUpdate then
         e:beforeUpdate(dt)
       end
-      if not e.invisibleToHash then self:updateEntityHash(e) end
     end
     
     i = i + 1
@@ -287,7 +274,6 @@ function entitySystem:update(dt)
       if e.update and e.canUpdate then
         e:update(dt)
       end
-      if not e.invisibleToHash then self:updateEntityHash(e) end
     end
     
     i = i + 1
@@ -301,7 +287,6 @@ function entitySystem:update(dt)
       if e.afterUpdate and e.canUpdate then
         e:afterUpdate(dt)
       end
-      if not e.invisibleToHash then self:updateEntityHash(e) end
     end
     
     i = i + 1
@@ -1065,8 +1050,6 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
       (extentsLeft or 0) + (extentsRight or 0), (extentsUp or 0) + (extentsDown or 0))
   end
   
-  self:updateEntityHash(e)
-  
   local result = e._currentHashes[1] and {unpack(e._currentHashes[1].data)} or {}
   
   for i = 2, #e._currentHashes do
@@ -1078,6 +1061,122 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
   end
   
   return result
+end
+
+function entitySystem:pos(e, x, y)
+  self:_conform(e)
+  
+  if (x or y) and (e.position.x ~= x or e.position.y ~= y) then
+    e.position.x = x or e.position.x
+    e.position.y = y or e.position.y
+    self:updateEntityHash(e)
+  end
+end
+
+function entitySystem:move(e, x, y, solids, resolverX, resolverY)
+  self:_conform(e)
+  
+  local vx, vy = (x or 0), (y or 0)
+  local colX, colY = false, false
+  
+  if vx ~= 0 or vy ~= 0 then
+    if solid and e.collisionShape then
+      local against = {unpack(solids)}
+      
+      for k, v in ipairs(against) do
+        if v == e or not v.collisionShape then
+          _quickRemove(against, k)
+        end
+      end
+      
+      if vx ~= 0 and vy ~= 0 then
+        local vxSign, vySign = vx > 0 and 1 or -1, vy > 0 and 1 or -1
+        local toX, toY = e.position.x + vx, e.position.y + vy
+        
+        for step = 0, 1, 0.25 do -- Take quarter-steps, just incase.
+          e.position.x = _lerp(e.position.x, toX, step)
+          
+          if not colX and self:collisionNumber(e, against) > 0 then
+            e.position.x = _floor(0.5 + e.position.x + vxSign)
+            
+            if resolverX then
+              resolverX(against)
+            else
+              while self:collisionNumber(e, against) > 0 do
+                e.position.x = e.position.x - vxSign
+              end
+            end
+            
+            colX = true
+          end
+          
+          e.position.y = _lerp(e.position.y, toY, step)
+          
+          if not colY and self:collisionNumber(e, against) > 0 then
+            e.position.y = _floor(0.5 + e.position.y + vySign)
+            
+            if resolverY then
+              resolverY(against)
+            else
+              while self:collisionNumber(e, against) > 0 do
+                e.position.y = e.position.y - vySign
+              end
+            end
+            
+            colY = true
+          end
+        end
+      elseif vx ~= 0 then
+        local vxSign = vx > 0 and 1 or -1
+        local toX = e.position.x + vx
+        
+        for step = 0, 1, 0.25 do
+          e.position.x = _lerp(e.position.x, toX, step)
+          
+          if not colX and self:collisionNumber(e, against) > 0 then
+            e.position.x = _floor(0.5 + e.position.x + vxSign)
+            
+            if resolverX then
+              resolverX(e, against)
+            else
+              while self:collisionNumber(e, against) > 0 do
+                e.position.x = e.position.x - vxSign
+              end
+            end
+            
+            colX = true
+          end
+        end
+      else
+        local vySign = vy > 0 and 1 or -1
+        local toY = e.position.y + vy
+        
+        for step = 0, 1, 0.25 do
+          e.position.y = _lerp(e.position.y, toY, step)
+          
+          if not colY and self:collisionNumber(e, against) > 0 then
+            e.position.y = _floor(0.5 + e.position.y + vySign)
+            
+            if resolverY then
+              resolverY(e, against)
+            else
+              while self:collisionNumber(e, against) > 0 do
+                e.position.y = e.position.y - vySign
+              end
+            end
+            
+            colY = true
+          end
+        end
+      end
+    else
+      e.position.x, e.position.y = e.position.x + vx, e.position.y + vy
+    end
+    
+    self:updateEntityHash(e)
+  end
+  
+  return colX, colY
 end
 
 function entitySystem:_conform(t)
