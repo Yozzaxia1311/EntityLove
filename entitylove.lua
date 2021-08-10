@@ -133,15 +133,7 @@ end
 
 -- Circle overlaps rectangle function adapted from [YellowAfterLife](https://yal.cc/rectangle-circle-intersection-test/).
 local function _circleOverlapsRect(x1, y1, r1, x2, y2, w2, h2)
-  local dx = x1 - _max(x2, _min(x1, x2 + w2))
-  local dy = y1 - _max(y2, _min(y1, y2 + h2))
-  return (dx * dx + dy * dy) < (r1 * r1)
-end
-
-local function _roundCircleOverlapsRect(x1, y1, r1, x2, y2, w2, h2)
-  local dx = x1 - _max(x2, _min(x1, x2 + w2))
-  local dy = y1 - _max(y2, _min(y1, y2 + h2))
-  return (dx * dx + dy * dy) < (r1 * r1)
+  return (((x1 - _max(x2, _min(x1, x2 + w2))) ^ 2) + ((y1 - _max(y2, _min(y1, y2 + h2))) ^ 2)) < r1 ^ 2
 end
 
 local function _imageOverlapsRect(x, y, data, x2, y2, w2, h2)
@@ -273,7 +265,7 @@ local _entityRoundedCollision = {
             e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
         end,
       function(e, other, x, y)
-          return _roundCircleOverlapsRect(_round(other.position.x), _round(other.position.y), _round(other.collisionShape.r),
+          return _circleOverlapsRect(_round(other.position.x), _round(other.position.y), _round(other.collisionShape.r),
             e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
         end
     },
@@ -293,7 +285,7 @@ local _entityRoundedCollision = {
     },
     {
       function(e, other, x, y)
-          return _roundCircleOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r),
+          return _circleOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r),
             _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
         end,
       function(e, other, x, y)
