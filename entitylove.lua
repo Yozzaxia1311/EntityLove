@@ -62,6 +62,24 @@ local function _icontains(t, va)
   return false
 end
 
+local function _emptyOrHoles(t)
+  for i = 1, #t do
+    if t[i] ~= -1 then
+      return false
+    end
+  end
+  
+  return #t > 0
+end
+
+local function _removeHoles(t)
+  for i = 1, #t do
+    if t[i] == -1 then
+      _quickRemove(t, i)
+    end
+  end
+end
+
 local function _removeValueArray(t, va)
   if t[#t] == va then t[#t] = nil return end
   
@@ -370,7 +388,7 @@ function entitySystem:update(dt)
   end
   
   if #self._updateHoles > 0 then
-    self:_removeHoles(self._updates)
+    _removeHoles(self._updates)
     self._updateHoles = {}
   end
   
@@ -402,7 +420,7 @@ function entitySystem:draw()
     end
     
     if #layer.holes > 0 then
-      self:_removeHoles(layer.data)
+      _removeHoles(layer.data)
       layer.holes = {}
     end
   end
@@ -484,14 +502,6 @@ function entitySystem:add(e)
   return e
 end
 
-function entitySystem:_removeHoles(t)
-  for i = 1, #t do
-    if t[i] == -1 then
-      _quickRemove(t, i)
-    end
-  end
-end
-
 function entitySystem:remove(e)
   self:_conform(e)
   
@@ -519,7 +529,7 @@ function entitySystem:remove(e)
     end
   end
   
-  if not e.static and al and next(al.data) == nil then
+  if not e.static and al and _emptyOrHoles(al.data) then
     _removeValueArray(self.layers, al)
   end
   
@@ -641,7 +651,7 @@ function entitySystem:setLayer(e, l)
           al.holes[i] = true
         end
         
-        if #al.data == 0 then
+        if _emptyOrHoles(al.data) then
           _removeValueArray(self.layers, al)
         end
       end
@@ -726,7 +736,7 @@ function entitySystem:makeStatic(e)
         al.holes[i] = true
       end
       
-      if #al.data == 0 then
+      if _emptyOrHoles(al.data) then
         _removeValueArray(self.layers, al)
       end
     end
