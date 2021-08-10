@@ -20,8 +20,18 @@ local _atan2 = math.atan2
 local _abs = math.abs
 local _remove = table.remove
 
-local function _lerp(a, b, t)
-  return (1 - t) * a + t * b
+local function _round(v)
+  return _floor(0.5 + v)
+end
+
+local function _approach(v, to, am)
+  if v < to then 
+    return _min(v + am, to)
+  elseif v > to then
+    return _max(v - am, to)
+  end
+  
+  return v
 end
 
 local function _dist2d(x, y, x2, y2)
@@ -109,16 +119,29 @@ local function _circleOverlapsCircle(x1, y1, r1, x2, y2, r2)
   return _dist2d(x1, y1, x2, y2) <= r1 + r2
 end
 
+local function _roundCircleOverlapsCircle(x1, y1, r1, x2, y2, r2)
+  return _round(_dist2d(x1, y1, x2, y2)) <= r1 + r2
+end
+
 local function _pointOverlapsCircle(x1, y1, x2, y2, r2)
   return _dist2d(x1, y1, x2, y2) <= r2
 end
 
+local function _roundPointOverlapsCircle(x1, y1, x2, y2, r2)
+  return _round(_dist2d(x1, y1, x2, y2)) <= r2
+end
+
+-- Circle overlaps rectangle function adapted from [YellowAfterLife](https://yal.cc/rectangle-circle-intersection-test/).
 local function _circleOverlapsRect(x1, y1, r1, x2, y2, w2, h2)
-  return _pointOverlapsRect(x1, y1, x2, y2, w2, h2) or
-    _pointOverlapsCircle(x2, y2, x1, y1, r1) or
-    _pointOverlapsCircle(x2 + w2, y2, x1, y1, r1) or
-    _pointOverlapsCircle(x2 + w2, y2 + h2, x1, y1, r1) or
-    _pointOverlapsCircle(x2, y2 + h2, x1, y1, r1)
+  local dx = x1 - _max(x2, _min(x1, x2 + w2))
+  local dy = y1 - _max(y2, _min(y1, y2 + h2))
+  return (dx * dx + dy * dy) < (r1 * r1)
+end
+
+local function _roundCircleOverlapsRect(x1, y1, r1, x2, y2, w2, h2)
+  local dx = x1 - _max(x2, _min(x1, x2 + w2))
+  local dy = y1 - _max(y2, _min(y1, y2 + h2))
+  return (dx * dx + dy * dy) < (r1 * r1)
 end
 
 local function _imageOverlapsRect(x, y, data, x2, y2, w2, h2)
@@ -144,6 +167,22 @@ local function _imageOverlapsCircle(x, y, data, x2, y2, r2)
       for yi=_clamp(_floor(y2-y)-r2, 0, newh), _clamp(_ceil(y2-y)+r2, 0, newh) do
         local _, _, _, a = data:getPixel(xi, yi)
         if a > 0 and _circleOverlapsRect(x2, y2, r2, x + xi, y + yi, 1, 1) then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
+local function _roundImageOverlapsCircle(x, y, data, x2, y2, r2)
+  if _roundCircleOverlapsRect(x2, y2, r2, x, y, data:getWidth(), data:getHeight()) then
+    local neww, newh = data:getWidth()-1, data:getHeight()-1
+    
+    for xi=_clamp(_floor(x2-x)-r2, 0, neww), _clamp(_ceil(x2-x)+r2, 0, neww) do
+      for yi=_clamp(_floor(y2-y)-r2, 0, newh), _clamp(_ceil(y2-y)+r2, 0, newh) do
+        local _, _, _, a = data:getPixel(xi, yi)
+        if a > 0 and _roundCircleOverlapsRect(x2, y2, r2, x + xi, y + yi, 1, 1) then
           return true
         end
       end
@@ -218,6 +257,52 @@ local _entityCollision = {
       function(e, other, x, y)
           return _circleOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.r,
             other.position.x, other.position.y, other.collisionShape.r)
+        end
+    }
+  }
+
+local _entityRoundedCollision = {
+    {
+      function(e, other, x, y)
+          return _rectOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0),
+            _round(e.collisionShape.w), _round(e.collisionShape.h),
+            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
+        end,
+      function(e, other, x, y)
+          return _imageOverlapsRect(_round(other.position.x), _round(other.position.y), other.collisionShape.data,
+            e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
+        end,
+      function(e, other, x, y)
+          return _roundCircleOverlapsRect(_round(other.position.x), _round(other.position.y), _round(other.collisionShape.r),
+            e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
+        end
+    },
+    {
+      function(e, other, x, y)
+          return _imageOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
+        end,
+      function(e, other, x, y)
+          return _imageOverlapsImage(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+            _round(other.position.x), _round(other.position.y), other.collisionShape.data)
+        end,
+      function(e, other, x, y)
+          return _roundImageOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.r))
+        end
+    },
+    {
+      function(e, other, x, y)
+          return _roundCircleOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r),
+            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
+        end,
+      function(e, other, x, y)
+          return _roundImageOverlapsCircle(_round(other.position.x), _round(other.position.y), other.collisionShape.data,
+            e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r))
+        end,
+      function(e, other, x, y)
+          return _roundCircleOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r),
+            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.r))
         end
     }
   }
@@ -472,7 +557,7 @@ function entitySystem:remove(e)
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-      local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
+      local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
       for x = cx, cx2 do
         for y = cy, cy2 do
@@ -717,7 +802,7 @@ function entitySystem:revertFromStatic(e)
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-      local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
+      local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
       for x = cx, cx2 do
         for y = cy, cy2 do
@@ -874,6 +959,11 @@ function entitySystem:collision(e, other, x, y)
     _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
 end
 
+function entitySystem:_rCollision(e, other, x, y)
+  return other and other ~= e and e.collisionShape and other.collisionShape and
+    _entityRoundedCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
+end
+
 function entitySystem:collisionTable(e, table, x, y)
   self:_conform(e)
   
@@ -902,6 +992,18 @@ function entitySystem:collisionNumber(e, table, x, y)
   return result
 end
 
+function entitySystem:_rCollisionNumber(e, table, x, y)
+  local result = 0
+  
+  for i = 1, #table do
+    if type(table[i]) == "table" and self:_rCollision(e, table[i], x, y) then
+      result = result + 1
+    end
+  end
+  
+  return result
+end
+
 function entitySystem:drawCollision(e)
   self:_conform(e)
   
@@ -923,22 +1025,18 @@ function entitySystem:updateEntityHash(e, forceUpdate)
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
       local hs = entitySystem.HASH_SIZE
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-      local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
+      local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
-      if forceUpdate or e._lastHashX ~= cx or e._lastHashY ~= cy or e._lastHashX2 ~= cx2 or e._lastHashY2 ~= cy2 then
+      if forceUpdate or e._lastHashX ~= cx or e._lastHashY ~= cy or e._lastHashX2 ~= cx2 or e._lastHashY2 ~= cy2 or not e._currentHashes then
+        if not e._currentHashes then
+          e._currentHashes = {}
+        end
+        
         e._lastHashX = cx
         e._lastHashY = cy
         e._lastHashX2 = cx2
         e._lastHashY2 = cy2
         
-        if not e._currentHashes then
-          e._currentHashes = {}
-        end
-        
-        local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
-        local hs = entitySystem.HASH_SIZE
-        local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
-        local cx2, cy2 = _floor((xx + ww + 2) / hs), _floor((yy + hh + 2) / hs)
         local emptyBefore = #e._currentHashes == 0
         local check = {}
         
@@ -1017,8 +1115,8 @@ function entitySystem:getEntitiesAt(xx, yy, ww, hh)
   local result
   local hs = entitySystem.HASH_SIZE
   
-  for x = _floor((xx - 2) / hs), _floor((xx + ww + 2) / hs) do
-    for y = _floor((yy - 2) / hs), _floor((yy + hh + 2) / hs) do
+  for x = _floor((xx - 2) / hs), _ceil((xx + ww + 2) / hs) do
+    for y = _floor((yy - 2) / hs), _ceil((yy + hh + 2) / hs) do
       if self._hashes[x] and self._hashes[x][y] then
         local hash = self._hashes[x][y]
         
@@ -1045,8 +1143,10 @@ function entitySystem:getSurroundingEntities(e, extentsLeft, extentsRight, exten
     return {}
   end
   
+  self:updateEntityHash(e)
+  
   if extentsLeft or extentsRight or extentsUp or extentsDown or not e._currentHashes then
-    return self:getEntitiesAt(e.position.x - (extentsLeft or 0), e.position.y + (extentsUp or 0),
+    return self:getEntitiesAt(e.position.x - (extentsLeft or 0), e.position.y - (extentsUp or 0),
       (extentsLeft or 0) + (extentsRight or 0), (extentsUp or 0) + (extentsDown or 0))
   end
   
@@ -1069,7 +1169,7 @@ function entitySystem:pos(e, x, y)
   if (x or y) and (e.position.x ~= x or e.position.y ~= y) then
     e.position.x = x or e.position.x
     e.position.y = y or e.position.y
-    self:updateEntityHash(e)
+    if not e.invisibleToHash then self:updateEntityHash(e) end
   end
 end
 
@@ -1080,7 +1180,7 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
   local colX, colY = false, false
   
   if vx ~= 0 or vy ~= 0 then
-    if solid and e.collisionShape then
+    if solids and e.collisionShape then
       local against = {unpack(solids)}
       
       for k, v in ipairs(against) do
@@ -1089,85 +1189,96 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
         end
       end
       
-      if vx ~= 0 and vy ~= 0 then
-        local vxSign, vySign = vx > 0 and 1 or -1, vy > 0 and 1 or -1
-        local toX, toY = e.position.x + vx, e.position.y + vy
-        
-        for step = 0, 1, 0.25 do -- Take quarter-steps, just incase.
-          e.position.x = _lerp(e.position.x, toX, step)
+      if #against > 0 then
+        if vx ~= 0 and vy ~= 0 then
+          local vxSign, vySign = vx > 0 and 1 or -1, vy > 0 and 1 or -1
+          local toX, toY = e.position.x + vx, e.position.y + vy
+          local angle = _atan2(vy, vx)
+          local dist = (e.collisionShape.w > e.collisionShape.h) and e.collisionShape.w or e.collisionShape.h
+          local moveX, moveY = _abs(_sin(angle) * dist), _abs(_cos(angle) * dist)
           
-          if not colX and self:collisionNumber(e, against) > 0 then
-            e.position.x = _floor(0.5 + e.position.x + vxSign)
-            
-            if resolverX then
-              resolverX(against)
-            else
-              while self:collisionNumber(e, against) > 0 do
-                e.position.x = e.position.x - vxSign
+          repeat
+            if not colX then
+              e.position.x = _approach(e.position.x, toX, moveX)
+              
+              if self:_rCollisionNumber(e, against) > 0 then
+                e.position.x = _round(e.position.x + vxSign)
+                
+                if resolverX then
+                  resolverX(against)
+                else
+                  while self:_rCollisionNumber(e, against) > 0 do
+                    e.position.x = e.position.x - vxSign * 0.5
+                  end
+                end
+                
+                colX = true
               end
             end
             
-            colX = true
-          end
-          
-          e.position.y = _lerp(e.position.y, toY, step)
-          
-          if not colY and self:collisionNumber(e, against) > 0 then
-            e.position.y = _floor(0.5 + e.position.y + vySign)
-            
-            if resolverY then
-              resolverY(against)
-            else
-              while self:collisionNumber(e, against) > 0 do
-                e.position.y = e.position.y - vySign
+            if not colY then
+              e.position.y = _approach(e.position.y, toY, moveY)
+              
+              if self:_rCollisionNumber(e, against) > 0 then
+                e.position.y = _round(e.position.y + vySign)
+                
+                if resolverY then
+                  resolverY(against)
+                else
+                  while self:_rCollisionNumber(e, against) > 0 do
+                    e.position.y = e.position.y - vySign * 0.5
+                  end
+                end
+                
+                colY = true
               end
             end
-            
-            colY = true
-          end
-        end
-      elseif vx ~= 0 then
-        local vxSign = vx > 0 and 1 or -1
-        local toX = e.position.x + vx
-        
-        for step = 0, 1, 0.25 do
-          e.position.x = _lerp(e.position.x, toX, step)
+          until (colX and colY) or (colX and e.position.y == toY) or (colY and e.position.x == toX) or (e.position.x == toX and e.position.y == toY)
+        elseif vx ~= 0 then
+          local vxSign = vx > 0 and 1 or -1
+          local toX = e.position.x + vx
           
-          if not colX and self:collisionNumber(e, against) > 0 then
-            e.position.x = _floor(0.5 + e.position.x + vxSign)
+          repeat
+            e.position.x = _approach(e.position.x, toX, e.collisionShape.w)
             
-            if resolverX then
-              resolverX(e, against)
-            else
-              while self:collisionNumber(e, against) > 0 do
-                e.position.x = e.position.x - vxSign
+            if self:_rCollisionNumber(e, against) > 0 then
+              e.position.x = _round(e.position.x + vxSign)
+              
+              if resolverX then
+                resolverX(against)
+              else
+                while self:_rCollisionNumber(e, against) > 0 do
+                  e.position.x = e.position.x - vxSign * 0.5
+                end
               end
+              
+              colX = true
             end
+          until colX or e.position.x == toX
+        else
+          local vySign = vy > 0 and 1 or -1
+          local toY = e.position.y + vy
+          
+          repeat
+            e.position.y = _approach(e.position.y, toY, e.collisionShape.h)
             
-            colX = true
-          end
+            if self:_rCollisionNumber(e, against) > 0 then
+              e.position.y = _round(e.position.y + vySign)
+              
+              if resolverY then
+                resolverY(against)
+              else
+                while self:_rCollisionNumber(e, against) > 0 do
+                  e.position.y = e.position.y - vySign * 0.5
+                end
+              end
+              
+              colY = true
+            end
+          until colY or e.position.y == toY
         end
       else
-        local vySign = vy > 0 and 1 or -1
-        local toY = e.position.y + vy
-        
-        for step = 0, 1, 0.25 do
-          e.position.y = _lerp(e.position.y, toY, step)
-          
-          if not colY and self:collisionNumber(e, against) > 0 then
-            e.position.y = _floor(0.5 + e.position.y + vySign)
-            
-            if resolverY then
-              resolverY(e, against)
-            else
-              while self:collisionNumber(e, against) > 0 do
-                e.position.y = e.position.y - vySign
-              end
-            end
-            
-            colY = true
-          end
-        end
+        e.position.x, e.position.y = e.position.x + vx, e.position.y + vy
       end
     else
       e.position.x, e.position.y = e.position.x + vx, e.position.y + vy
