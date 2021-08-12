@@ -141,18 +141,10 @@ local function _pointOverlapsRect(x1, y1, x2, y2, w2, h2)
 end
 
 local function _circleOverlapsCircle(x1, y1, r1, x2, y2, r2)
-  return _dist2d(x1, y1, x2, y2) <= r1 + r2
-end
-
-local function _roundCircleOverlapsCircle(x1, y1, r1, x2, y2, r2)
   return _round(_dist2d(x1, y1, x2, y2)) <= r1 + r2
 end
 
 local function _pointOverlapsCircle(x1, y1, x2, y2, r2)
-  return _dist2d(x1, y1, x2, y2) <= r2
-end
-
-local function _roundPointOverlapsCircle(x1, y1, x2, y2, r2)
   return _round(_dist2d(x1, y1, x2, y2)) <= r2
 end
 
@@ -184,22 +176,6 @@ local function _imageOverlapsCircle(x, y, data, x2, y2, r2)
       for yi=_clamp(_floor(y2-y)-r2, 0, newh), _clamp(_ceil(y2-y)+r2, 0, newh) do
         local _, _, _, a = data:getPixel(xi, yi)
         if a > 0 and _circleOverlapsRect(x2, y2, r2, x + xi, y + yi, 1, 1) then
-          return true
-        end
-      end
-    end
-  end
-  return false
-end
-
-local function _roundImageOverlapsCircle(x, y, data, x2, y2, r2)
-  if _roundCircleOverlapsRect(x2, y2, r2, x, y, data:getWidth(), data:getHeight()) then
-    local neww, newh = data:getWidth()-1, data:getHeight()-1
-    
-    for xi=_clamp(_floor(x2-x)-r2, 0, neww), _clamp(_ceil(x2-x)+r2, 0, neww) do
-      for yi=_clamp(_floor(y2-y)-r2, 0, newh), _clamp(_ceil(y2-y)+r2, 0, newh) do
-        local _, _, _, a = data:getPixel(xi, yi)
-        if a > 0 and _roundCircleOverlapsRect(x2, y2, r2, x + xi, y + yi, 1, 1) then
           return true
         end
       end
@@ -274,52 +250,6 @@ local _entityCollision = {
       function(e, other, x, y)
           return _circleOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.r,
             other.position.x, other.position.y, other.collisionShape.r)
-        end
-    }
-  }
-
-local _entityRoundedCollision = {
-    {
-      function(e, other, x, y)
-          return _rectOverlapsRect(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0),
-            _round(e.collisionShape.w), _round(e.collisionShape.h),
-            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
-        end,
-      function(e, other, x, y)
-          return _imageOverlapsRect(_round(other.position.x), _round(other.position.y), other.collisionShape.data,
-            _round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
-        end,
-      function(e, other, x, y)
-          return _circleOverlapsRect(_round(other.position.x), _round(other.position.y), _round(other.collisionShape.r),
-            _round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
-        end
-    },
-    {
-      function(e, other, x, y)
-          return _imageOverlapsRect(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), e.collisionShape.data,
-            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
-        end,
-      function(e, other, x, y)
-          return _imageOverlapsImage(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), e.collisionShape.data,
-            _round(other.position.x), _round(other.position.y), other.collisionShape.data)
-        end,
-      function(e, other, x, y)
-          return _roundImageOverlapsCircle(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), e.collisionShape.data,
-            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.r))
-        end
-    },
-    {
-      function(e, other, x, y)
-          return _circleOverlapsRect(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.r),
-            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
-        end,
-      function(e, other, x, y)
-          return _roundImageOverlapsCircle(_round(other.position.x), _round(other.position.y), other.collisionShape.data,
-            _round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.r))
-        end,
-      function(e, other, x, y)
-          return _roundCircleOverlapsCircle(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.r),
-            _round(other.position.x), _round(other.position.y), _round(other.collisionShape.r))
         end
     }
   }
@@ -968,11 +898,6 @@ function entitySystem:collision(e, other, x, y)
     _entityCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
 end
 
-function entitySystem:_rCollision(e, other, x, y)
-  return other and other ~= e and e.collisionShape and other.collisionShape and
-    _entityRoundedCollision[e.collisionShape.type][other.collisionShape.type](e, other, x, y)
-end
-
 function entitySystem:collisionTable(e, table, x, y)
   self:_conform(e)
   
@@ -994,18 +919,6 @@ function entitySystem:collisionNumber(e, table, x, y)
   
   for i = 1, #table do
     if type(table[i]) == "table" and self:collision(e, table[i], x, y) then
-      result = result + 1
-    end
-  end
-  
-  return result
-end
-
-function entitySystem:_rCollisionNumber(e, table, x, y)
-  local result = 0
-  
-  for i = 1, #table do
-    if type(table[i]) == "table" and self:_rCollision(e, table[i], x, y) then
       result = result + 1
     end
   end
@@ -1210,13 +1123,13 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
             if not colX then
               e.position.x = _approach(e.position.x, toX, moveX)
               
-              if self:_rCollisionNumber(e, against) > 0 then
+              if self:collisionNumber(e, against) > 0 then
                 e.position.x = _round(e.position.x + vxSign)
                 
                 if resolverX then
                   resolverX(against)
                 else
-                  while self:_rCollisionNumber(e, against) > 0 do
+                  while self:collisionNumber(e, against) > 0 do
                     e.position.x = e.position.x - vxSign * 0.5
                   end
                 end
@@ -1228,13 +1141,13 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
             if not colY then
               e.position.y = _approach(e.position.y, toY, moveY)
               
-              if self:_rCollisionNumber(e, against) > 0 then
+              if self:collisionNumber(e, against) > 0 then
                 e.position.y = _round(e.position.y + vySign)
                 
                 if resolverY then
                   resolverY(against)
                 else
-                  while self:_rCollisionNumber(e, against) > 0 do
+                  while self:collisionNumber(e, against) > 0 do
                     e.position.y = e.position.y - vySign * 0.5
                   end
                 end
@@ -1250,13 +1163,13 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
           repeat
             e.position.x = _approach(e.position.x, toX, e.collisionShape.w)
             
-            if self:_rCollisionNumber(e, against) > 0 then
+            if self:collisionNumber(e, against) > 0 then
               e.position.x = _round(e.position.x + vxSign)
               
               if resolverX then
                 resolverX(against)
               else
-                while self:_rCollisionNumber(e, against) > 0 do
+                while self:collisionNumber(e, against) > 0 do
                   e.position.x = e.position.x - vxSign * 0.5
                 end
               end
@@ -1271,13 +1184,13 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
           repeat
             e.position.y = _approach(e.position.y, toY, e.collisionShape.h)
             
-            if self:_rCollisionNumber(e, against) > 0 then
+            if self:collisionNumber(e, against) > 0 then
               e.position.y = _round(e.position.y + vySign)
               
               if resolverY then
                 resolverY(against)
               else
-                while self:_rCollisionNumber(e, against) > 0 do
+                while self:collisionNumber(e, against) > 0 do
                   e.position.y = e.position.y - vySign * 0.5
                 end
               end
