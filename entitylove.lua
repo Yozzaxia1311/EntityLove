@@ -158,7 +158,7 @@ end
 
 -- Circle overlaps rectangle function adapted from [YellowAfterLife](https://yal.cc/rectangle-circle-intersection-test/).
 local function _circleOverlapsRect(x1, y1, r1, x2, y2, w2, h2)
-  return (((x1 - _max(x2, _min(x1, x2 + w2))) ^ 2) + ((y1 - _max(y2, _min(y1, y2 + h2))) ^ 2)) < r1 ^ 2
+  return ((x1 - _max(x2, _min(x1, x2 + w2))) ^ 2) + ((y1 - _max(y2, _min(y1, y2 + h2))) ^ 2) < r1 ^ 2
 end
 
 local function _imageOverlapsRect(x, y, data, x2, y2, w2, h2)
@@ -281,44 +281,44 @@ local _entityCollision = {
 local _entityRoundedCollision = {
     {
       function(e, other, x, y)
-          return _rectOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0),
+          return _rectOverlapsRect(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0),
             _round(e.collisionShape.w), _round(e.collisionShape.h),
             _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
         end,
       function(e, other, x, y)
           return _imageOverlapsRect(_round(other.position.x), _round(other.position.y), other.collisionShape.data,
-            e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
+            _round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
         end,
       function(e, other, x, y)
           return _circleOverlapsRect(_round(other.position.x), _round(other.position.y), _round(other.collisionShape.r),
-            e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
+            _round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.w), _round(e.collisionShape.h))
         end
     },
     {
       function(e, other, x, y)
-          return _imageOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+          return _imageOverlapsRect(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), e.collisionShape.data,
             _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
         end,
       function(e, other, x, y)
-          return _imageOverlapsImage(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+          return _imageOverlapsImage(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), e.collisionShape.data,
             _round(other.position.x), _round(other.position.y), other.collisionShape.data)
         end,
       function(e, other, x, y)
-          return _roundImageOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+          return _roundImageOverlapsCircle(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), e.collisionShape.data,
             _round(other.position.x), _round(other.position.y), _round(other.collisionShape.r))
         end
     },
     {
       function(e, other, x, y)
-          return _circleOverlapsRect(e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r),
+          return _circleOverlapsRect(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.r),
             _round(other.position.x), _round(other.position.y), _round(other.collisionShape.w), _round(other.collisionShape.h))
         end,
       function(e, other, x, y)
           return _roundImageOverlapsCircle(_round(other.position.x), _round(other.position.y), other.collisionShape.data,
-            e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r))
+            _round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.r))
         end,
       function(e, other, x, y)
-          return _roundCircleOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), _round(e.collisionShape.r),
+          return _roundCircleOverlapsCircle(_round(e.position.x) + (x or 0), _round(e.position.y) + (y or 0), _round(e.collisionShape.r),
             _round(other.position.x), _round(other.position.y), _round(other.collisionShape.r))
         end
     }
