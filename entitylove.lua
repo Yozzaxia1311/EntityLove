@@ -267,6 +267,7 @@ function entitySystem:init()
   self._HS =  {}
   self._doSort = false
   self.inLoop = false
+  self.inDrawLoop = false
   self.drawCollision = false
   self._imgCache = {}
   self._updateHoles = {}
@@ -340,7 +341,7 @@ function entitySystem:draw()
     self:_sortLayers()
   end
   
-  self.inLoop = true
+  self.inDrawLoop = true
   
   for _, layer in ipairs(self.layers) do
     local i = 1
@@ -371,7 +372,7 @@ function entitySystem:draw()
     end
   end
   
-  self.inLoop = false
+  self.inDrawLoop = false
   
   love.graphics.setColor(r, g, b, a)
 end
@@ -386,10 +387,14 @@ function entitySystem:add(e)
       local v = self.layers[i]
       
       if v.layer == e._layer then
-        local nextHole = next(v.holes)
-        if nextHole then
-          v.data[nextHole] = e
-          v.holes[nextHole] = nil
+        if not self.inDrawLoop then
+          local nextHole = next(v.holes)
+          if nextHole then
+            v.data[nextHole] = e
+            v.holes[nextHole] = nil
+          else
+            v.data[#v.data + 1] = e
+          end
         else
           v.data[#v.data + 1] = e
         end
@@ -403,10 +408,14 @@ function entitySystem:add(e)
       self._doSort = true
     end
     
-    local nextHole = next(self._updateHoles)
-    if nextHole then
-      self._updates[nextHole] = e
-      self._updateHoles[nextHole] = nil
+    if not self.inLoop then
+      local nextHole = next(self._updateHoles)
+      if nextHole then
+        self._updates[nextHole] = e
+        self._updateHoles[nextHole] = nil
+      else
+        self._updates[#self._updates + 1] = e
+      end
     else
       self._updates[#self._updates + 1] = e
     end
@@ -601,10 +610,14 @@ function entitySystem:setLayer(e, l)
         local v = self.layers[i]
         
         if v.layer == e._layer then
-          local nextHole = next(v.holes)
-          if nextHole then
-            v.data[nextHole] = e
-            v.holes[nextHole] = nil
+          if not self.inDrawLoop then
+            local nextHole = next(v.holes)
+            if nextHole then
+              v.data[nextHole] = e
+              v.holes[nextHole] = nil
+            else
+              v.data[#v.data + 1] = e
+            end
           else
             v.data[#v.data + 1] = e
           end
@@ -711,10 +724,14 @@ function entitySystem:revertFromStatic(e)
     for i=1, #self.layers do
       local v = self.layers[i]
       if v.layer == e._layer then
-        local nextHole = next(v.holes)
-        if nextHole then
-          v.data[nextHole] = e
-          v.holes[nextHole] = nil
+        if not self.inDrawLoop then
+          local nextHole = next(v.holes)
+          if nextHole then
+            v.data[nextHole] = e
+            v.holes[nextHole] = nil
+          else
+            v.data[#v.data + 1] = e
+          end
         else
           v.data[#v.data + 1] = e
         end
@@ -728,10 +745,14 @@ function entitySystem:revertFromStatic(e)
       self._doSort = true
     end
     
-    local nextHole = next(self._updateHoles)
-    if nextHole then
-      self._updates[nextHole] = e
-      self._updateHoles[nextHole] = nil
+    if not self.inLoop then
+      local nextHole = next(self._updateHoles)
+      if nextHole then
+        self._updates[nextHole] = e
+        self._updateHoles[nextHole] = nil
+      else
+        self._updates[#self._updates + 1] = e
+      end
     else
       self._updates[#self._updates + 1] = e
     end

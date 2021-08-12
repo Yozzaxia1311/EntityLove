@@ -73,6 +73,8 @@ end
 
 **`.inLoop`: readonly boolean**: If currently in update loop.
 
+**`.inDrawLoop`: readonly boolean**: If currently in draw loop.
+
 **`.drawCollision`: readonly boolean**: draws collision for active entities. Useful for debugging.
 
 **`.groups`: readonly table**: table of groups.
