@@ -63,19 +63,26 @@ local function _icontains(t, va)
 end
 
 local function _emptyOrHoles(t)
+  if #t == 0 then
+    return true
+  end
+  
   for i = 1, #t do
     if t[i] ~= -1 then
       return false
     end
   end
   
-  return #t > 0
+  return true
 end
 
 local function _removeHoles(t)
-  for i = 1, #t do
+  local i = 1
+  while i <= #t do
     if t[i] == -1 then
       _quickRemove(t, i)
+    else
+      i = i + 1
     end
   end
 end
@@ -387,7 +394,7 @@ function entitySystem:update(dt)
     i = i + 1
   end
   
-  if #self._updateHoles > 0 then
+  if next(self._updateHoles) then
     _removeHoles(self._updates)
     self._updateHoles = {}
   end
@@ -419,7 +426,7 @@ function entitySystem:draw()
       i = i + 1
     end
     
-    if #layer.holes > 0 then
+    if next(layer.holes) then
       _removeHoles(layer.data)
       layer.holes = {}
     end
