@@ -2,7 +2,6 @@
 
 local entitySystem = {}
 
-entitySystem.HASH_SIZE = 96
 entitySystem.COL_RECT = 1
 entitySystem.COL_IMAGE = 2
 entitySystem.COL_CIRCLE = 3
@@ -185,7 +184,8 @@ local function _imageOverlapsCircle(x, y, data, x2, y2, r2)
 end
 
 local function _imageOverlapsImage(x, y, data, x2, y2, data2)
-  if _rectOverlapsRect(x, y, data:getWidth(), data:getHeight(), x2, y2, data2:getWidth(), data2:getHeight()) then
+  if _rectOverlapsRect(x, y, data:getWidth(), data:getHeight(), x2, y2,
+    data2:getWidth(), data2:getHeight()) then
     local neww, newh = data:getWidth()-1, data:getHeight()-1
     local neww2, newh2 = data2:getWidth()-1, data2:getHeight()-1
     
@@ -234,7 +234,8 @@ local _entityCollision = {
             other.position.x, other.position.y, other.collisionShape.data)
         end,
       function(e, other, x, y)
-          return _imageOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0), e.collisionShape.data,
+          return _imageOverlapsCircle(e.position.x + (x or 0), e.position.y + (y or 0),
+            e.collisionShape.data,
             other.position.x, other.position.y, other.collisionShape.r)
         end
     },
@@ -256,21 +257,26 @@ local _entityCollision = {
 
 -- Entity processing system.
 
-function entitySystem:init()
-  self.layers = {}
-  self._updates = {}
-  self.groups = {}
-  self.static = {}
-  self.all = {}
-  self._readyQueue = {}
-  self._hashes = {}
-  self._HS =  {}
-  self._doSort = false
-  self.inLoop = false
-  self.inDrawLoop = false
-  self.drawCollision = false
-  self._imgCache = {}
-  self._updateHoles = {}
+function entitySystem_new(self, hs)
+  local new = {}
+  
+  new.layers = {}
+  new._updates = {}
+  new.groups = {}
+  new.static = {}
+  new.all = {}
+  new._readyQueue = {}
+  new._hashes = {}
+  new._HS = {}
+  new._doSort = false
+  new.inLoop = false
+  new.inDrawLoop = false
+  new.drawCollision = false
+  new._imgCache = {}
+  new._updateHoles = {}
+  new.hashSize = hs or 96
+  
+  return setmetatable(new, {__index = entitySystem})
 end
 
 function entitySystem:update(dt)
@@ -503,7 +509,7 @@ function entitySystem:remove(e)
     if e.collisionShape and e._staticX == e.position.x and e._staticY == e.position.y and
       e._staticW == e.collisionShape.w and e._staticH == e.collisionShape.h then
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
-      local hs = entitySystem.HASH_SIZE
+      local hs = self.hashSize
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
       local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
@@ -760,7 +766,7 @@ function entitySystem:revertFromStatic(e)
     if e.collisionShape and e._staticX == e.position.x and e._staticY == e.position.y and
       e._staticW == e.collisionShape.w and e._staticH == e.collisionShape.h then
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
-      local hs = entitySystem.HASH_SIZE
+      local hs = self.hashSize
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
       local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
@@ -966,7 +972,7 @@ function entitySystem:updateEntityHash(e, forceUpdate)
   if e.collisionShape and not e.invisibleToHash then
     if (forceUpdate or e.isAdded) then
       local xx, yy, ww, hh = e.position.x, e.position.y, e.collisionShape.w, e.collisionShape.h
-      local hs = entitySystem.HASH_SIZE
+      local hs = self.hashSize
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
       local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
@@ -1056,7 +1062,7 @@ end
 
 function entitySystem:getEntitiesAt(xx, yy, ww, hh)
   local result
-  local hs = entitySystem.HASH_SIZE
+  local hs = self.hashSize
   
   for x = _floor((xx - 2) / hs), _ceil((xx + ww + 2) / hs) do
     for y = _floor((yy - 2) / hs), _ceil((yy + hh + 2) / hs) do
@@ -1263,6 +1269,4 @@ function entitySystem:_conform(t)
   return t
 end
 
-entitySystem:init()
-
-return entitySystem
+return setmetatable(entitySystem, {__call = entitySystem_new})

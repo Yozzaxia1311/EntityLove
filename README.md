@@ -9,7 +9,8 @@ EntityLove is a entity handling system with built-in z-indexing, collision, and 
 First, create the system:
 
 ```lua
-local system = require("entitylove")
+local entitylove = require("entitylove")
+local system = entitylove(96) -- Hash size is an optional arg, and defaults to `96`.
 ```
 
 Then, create the entity using your class implementation of choice (or an empty table will work, too! See example in `main.lua`):
@@ -65,13 +66,23 @@ end
 
 ## `entitySystem`
 
-**`.HASH_SIZE`: enum = 96**: Hash cell size.
+---
+
+**`entitySystem(hashSize)` / (`__call` metatable function)**
+
+**`hashSize`: number = 96**
+
+Creates an instance of `entitySystem` with `hashSize` as the spatial hash size.
+
+---
 
 **`.COL_RECT`: enum = 1**: Rectangle collider type.
 
 **`.COL_IMAGE`: enum = 2**: Image collider type.
 
 **`.COL_CIRCLE`: enum = 3**: Circle collider type.
+
+**`.hashSize`: readonly number**: Hash cell size.
 
 **`.inLoop`: readonly boolean**: If currently in update loop.
 

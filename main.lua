@@ -1,14 +1,15 @@
 -- This demo demonstrates collision using the built-in spatial hashing.
 
 io.stdout:setvbuf("no")
-
-local system = require("entitylove")
+local entitylove = require("entitylove")
+local system = entitylove()
 
 local function drawParticle(self)
   if self.collisionShape.type == system.COL_CIRCLE then
     love.graphics.circle("fill", self.position.x, self.position.y, self.collisionShape.r)
   else
-    love.graphics.rectangle("fill", self.position.x, self.position.y, self.collisionShape.w, self.collisionShape.h)
+    love.graphics.rectangle("fill", self.position.x, self.position.y,
+      self.collisionShape.w, self.collisionShape.h)
   end
 end
 
@@ -53,7 +54,8 @@ end
 
 local function drawPlayer(self)
   love.graphics.setColor(0, 1, 0, 1)
-  love.graphics.rectangle("fill", self.position.x, self.position.y, self.collisionShape.w, self.collisionShape.h)
+  love.graphics.rectangle("fill", self.position.x, self.position.y,
+    self.collisionShape.w, self.collisionShape.h)
 end
 
 function createPlayer(x, y)
@@ -70,7 +72,8 @@ end
 
 function love.load()
   for i = 1, 100 do
-    system:add(createParticle(love.math.random(0, love.graphics.getWidth() - 24), love.math.random(0, love.graphics.getHeight() - 64)))
+    system:add(createParticle(love.math.random(0, love.graphics.getWidth() - 24),
+      love.math.random(0, love.graphics.getHeight() - 64)))
   end
   
   system:add(createPlayer(love.graphics.getWidth() / 2, love.graphics.getHeight() - 18))
