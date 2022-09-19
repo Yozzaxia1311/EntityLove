@@ -27,7 +27,7 @@ function entity:new(x, y)
                                               -- also update the spatial hash.
   
   system:addToGroup(self, "myGroup")          -- Retrieve group table using `system.groups["groupName"]`.
-                                              -- Entities will be removed from all groups
+                                              -- An entity will be removed from all groups
                                               -- when `system:remove(e)` is called.
 end
 
