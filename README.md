@@ -302,8 +302,6 @@ Reverts "static" state from `e`, making it a normal entity. This function calls 
 
 ## Entity Event Functions and Variables
 
-### Note: entity variables interface with the system, but are not required. Variables documented below are initialized manually by the user. EntityLove will conform the entity with default values, if it's needed.
-
 **`.isRemoved`: readonly boolean**: if `self` is removed from the system.
 
 **`.isAdded`: readonly boolean**: if `self` is added to the system.
