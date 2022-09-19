@@ -377,6 +377,6 @@ Called when `self` is removed from the system.
 
 **`:staticToggled()`**
 
-Called when `self` is marked as "static" by the system. Read `entitySystem:makeStatic(e)` documention for more details.
+Called when `self` is has its "static" state toggled by the system. Read `entitySystem:makeStatic(e)` documention for more details.
 
 ---
