@@ -349,7 +349,7 @@ Called once per `entitySystem:update(dt)`, before the system has called any enti
 
 ---
 
-**`:update(dt)`**
+**`:afterUpdate(dt)`**
 
 **`dt`: number**
 
