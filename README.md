@@ -12,21 +12,23 @@ First, create the system:
 local system = require("entitylove")
 ```
 
-Then, create the entity using your class implementation of choice (or an empty table will work, too!):
+Then, create the entity using your class implementation of choice (or an empty table will work, too! See example in `main.lua`):
 
 ```lua
 local entity = class:extend()
 
 function entity:new(x, y)
   -- Manipulate all the EntityLove entity bits to your liking!
-  self.position = {} -- EntityLove uses `self.position` and
-                     -- `self.collisionShape` for collision and spatial hashing.
-  self.position.x = x
-  self.position.y = y
-  system:setRectangleCollision(self, 32, 32) -- `self.collisionShape` is set here.
-  system:addToGroup(self, "myGroup") -- Retrieve group table using `system.groups["groupName"]`.
-                                     -- Entities will be removed from all groups
-                                     -- when `system:remove(e)` is called.
+  system:pos(self, x, y)                      -- EntityLove stores position as `self.position`.
+                                              -- Using `system:pos(e, x, y)` will update the spatial hash.
+  
+  system:setRectangleCollision(self, 32, 32)  -- `self.collisionShape` is set here.
+                                              -- `system`'s collision setter functions will
+                                              -- also update the spatial hash.
+  
+  system:addToGroup(self, "myGroup")          -- Retrieve group table using `system.groups["groupName"]`.
+                                              -- Entities will be removed from all groups
+                                              -- when `system:remove(e)` is called.
 end
 
 -- EntityLove checks for special event functions to call.
