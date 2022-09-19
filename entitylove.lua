@@ -976,7 +976,8 @@ function entitySystem:updateEntityHash(e, forceUpdate)
       local cx, cy = _floor((xx - 2) / hs), _floor((yy - 2) / hs)
       local cx2, cy2 = _ceil((xx + ww + 2) / hs), _ceil((yy + hh + 2) / hs)
       
-      if forceUpdate or e._lastHashX ~= cx or e._lastHashY ~= cy or e._lastHashX2 ~= cx2 or e._lastHashY2 ~= cy2 or not e._currentHashes then
+      if forceUpdate or e._lastHashX ~= cx or e._lastHashY ~= cy or
+        e._lastHashX2 ~= cx2 or e._lastHashY2 ~= cy2 or not e._currentHashes then
         if not e._currentHashes then
           e._currentHashes = {}
         end
@@ -1130,11 +1131,11 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
   
   if vx ~= 0 or vy ~= 0 then
     if solids and e.collisionShape then
-      local against = {unpack(solids)}
+      local against = {}
       
-      for k, v in ipairs(against) do
-        if v == e or not v.collisionShape then
-          _quickRemove(against, k)
+      for k, v in ipairs(solids) do
+        if v ~= e and v.collisionShape then
+          against[#against + 1] = v
         end
       end
       
@@ -1143,7 +1144,8 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
           local vxSign, vySign = vx > 0 and 1 or -1, vy > 0 and 1 or -1
           local toX, toY = e.position.x + vx, e.position.y + vy
           local angle = _atan2(vy, vx)
-          local dist = (e.collisionShape.w > e.collisionShape.h) and e.collisionShape.w or e.collisionShape.h
+          local dist = (e.collisionShape.w > e.collisionShape.h) and
+            e.collisionShape.w or e.collisionShape.h
           local moveX, moveY = _abs(_sin(angle) * dist), _abs(_cos(angle) * dist)
           
           repeat
@@ -1182,7 +1184,8 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
                 colY = true
               end
             end
-          until (colX and colY) or (colX and e.position.y == toY) or (colY and e.position.x == toX) or (e.position.x == toX and e.position.y == toY)
+          until (colX and colY) or (colX and e.position.y == toY) or
+            (colY and e.position.x == toX) or (e.position.x == toX and e.position.y == toY)
         elseif vx ~= 0 then
           local vxSign = vx > 0 and 1 or -1
           local toX = e.position.x + vx
