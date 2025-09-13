@@ -8,6 +8,13 @@ local function drawParticle(self)
   if self.collisionShape.type == system.COL_CIRCLE then
     love.graphics.circle("fill", self.position.x, self.position.y, self.collisionShape.r)
   else
+    if system:pointInEntity(self, love.mouse.getX(), love.mouse.getY()) then
+      love.graphics.setColor(1, 0, 0, 1)
+      if love.mouse.isDown(1) then
+        system:remove(self)
+      end
+    end
+    
     love.graphics.rectangle("fill", self.position.x, self.position.y,
       self.collisionShape.w, self.collisionShape.h)
   end

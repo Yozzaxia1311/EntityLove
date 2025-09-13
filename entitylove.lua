@@ -61,31 +61,6 @@ local function _icontains(t, va)
   return false
 end
 
-local function _emptyOrHoles(t)
-  if #t == 0 then
-    return true
-  end
-  
-  for i = 1, #t do
-    if t[i] ~= -1 then
-      return false
-    end
-  end
-  
-  return true
-end
-
-local function _removeHoles(t)
-  local i = 1
-  while i <= #t do
-    if t[i] == -1 then
-      _quickRemove(t, i)
-    else
-      i = i + 1
-    end
-  end
-end
-
 local function _removeValueArray(t, va)
   if t[#t] == va then t[#t] = nil return end
   
@@ -272,9 +247,9 @@ function entitySystem_new(self, hs)
   new.inLoop = false
   new.inDrawLoop = false
   new.drawCollision = false
-  new._imgCache = {}
-  new._updateHoles = {}
   new.hashSize = hs or 96
+  new._entityRemovedInLoop = false
+  new._tempEnt = {invisibleToHash = true}
   
   return setmetatable(new, {__index = entitySystem})
 end
@@ -302,7 +277,9 @@ function entitySystem:update(dt)
       end
     end
     
-    i = i + 1
+    if not e.isRemoved then
+      i = i + 1
+    end
   end
   
   i = 1
@@ -315,7 +292,9 @@ function entitySystem:update(dt)
       end
     end
     
-    i = i + 1
+    if not e.isRemoved then
+      i = i + 1
+    end
   end
   
   i = 1
@@ -328,12 +307,9 @@ function entitySystem:update(dt)
       end
     end
     
-    i = i + 1
-  end
-  
-  if next(self._updateHoles) then
-    _removeHoles(self._updates)
-    self._updateHoles = {}
+    if not e.isRemoved then
+      i = i + 1
+    end
   end
   
   self.inLoop = false
@@ -355,17 +331,14 @@ function entitySystem:draw()
     while i <= #layer.data do
       local e = layer.data[i]
       
-      if e ~= -1 and e.draw and e.canDraw then
+      if e.draw and e.canDraw then
         love.graphics.setColor(1, 1, 1, 1)
         e:draw()
       end
       
-      i = i + 1
-    end
-    
-    if next(layer.holes) then
-      _removeHoles(layer.data)
-      layer.holes = {}
+      if not e.isRemoved then
+        i = i + 1
+      end
     end
   end
   
@@ -393,38 +366,18 @@ function entitySystem:add(e)
       local v = self.layers[i]
       
       if v.layer == e._layer then
-        if not self.inDrawLoop then
-          local nextHole = next(v.holes)
-          if nextHole then
-            v.data[nextHole] = e
-            v.holes[nextHole] = nil
-          else
-            v.data[#v.data + 1] = e
-          end
-        else
-          v.data[#v.data + 1] = e
-        end
+        v.data[#v.data + 1] = e
         done = true
         break
       end
     end
     
     if not done then
-      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}, holes = {}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
       self._doSort = true
     end
     
-    if not self.inLoop then
-      local nextHole = next(self._updateHoles)
-      if nextHole then
-        self._updates[nextHole] = e
-        self._updateHoles[nextHole] = nil
-      else
-        self._updates[#self._updates + 1] = e
-      end
-    else
-      self._updates[#self._updates + 1] = e
-    end
+    self._updates[#self._updates + 1] = e
   else
     self.static[#self.static + 1] = e
   end
@@ -459,30 +412,23 @@ function entitySystem:remove(e)
   
   e.isRemoved = true
   if e.removed then e:removed() end
-  self:removeFromAllGroups(e)
   
-  local al = self:_getLayerData(e._layer)
+  self:removeFromAllGroups(e)
   
   if e.static then
     _quickRemoveValueArray(self.static, e)
   else
-    if al then
-      local i = _findIndexArray(al.data, e)
-      if i then
-        al.data[i] = -1
-        al.holes[i] = true
+    local ld = self:_getLayerData(e._layer)
+    
+    if ld then
+      _removeValueArray(ld.data, e)
+      
+      if #ld.data == 0 then
+        _removeValueArray(self.layers, ld)
       end
     end
     
-    local i = _findIndexArray(self._updates, e)
-    if i then
-      self._updates[i] = -1
-      self._updateHoles[i] = true
-    end
-  end
-  
-  if not e.static and al and _emptyOrHoles(al.data) then
-    _removeValueArray(self.layers, al)
+    _removeValueArray(self._updates, e)
   end
   
   _quickRemoveValueArray(self.all, e)
@@ -581,7 +527,6 @@ function entitySystem:clear()
   self._doSort = false
   self._readyQueue = {}
   self._removeQueue = {}
-  self._updateHoles = {}
   
   collectgarbage()
   collectgarbage()
@@ -597,13 +542,9 @@ function entitySystem:setLayer(e, l)
       local al = self:_getLayerData(e._layer)
       
       if al then
-        local i = _findIndexArray(al.data, e)
-        if i then
-          al.data[i] = -1
-          al.holes[i] = true
-        end
+        _removeValueArray(al.data, e)
         
-        if _emptyOrHoles(al.data) then
+        if #al.data == 0 then
           _removeValueArray(self.layers, al)
         end
       end
@@ -616,24 +557,14 @@ function entitySystem:setLayer(e, l)
         local v = self.layers[i]
         
         if v.layer == e._layer then
-          if not self.inDrawLoop then
-            local nextHole = next(v.holes)
-            if nextHole then
-              v.data[nextHole] = e
-              v.holes[nextHole] = nil
-            else
-              v.data[#v.data + 1] = e
-            end
-          else
-            v.data[#v.data + 1] = e
-          end
+          v.data[#v.data + 1] = e
           done = true
           break
         end
       end
       
       if not done then
-        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}, holes = {}}
+        self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
         self._doSort = true
       end
     end
@@ -677,22 +608,14 @@ function entitySystem:makeStatic(e)
   self:_conform(e)
   
   if not e.static and not e.isRemoved then
-    local i = _findIndexArray(self._updates, e)
-    if i then
-      self._updates[i] = -1
-      self._updateHoles[i] = true
-    end
+    _removeValueArray(self._updates, e)
     
     local al = self:_getLayerData(e._layer)
     
     if al then
-      local i = _findIndexArray(al.data, e)
-      if i then
-        al.data[i] = -1
-        al.holes[i] = true
-      end
+      _removeValueArray(al.data, e)
       
-      if _emptyOrHoles(al.data) then
+      if #al.data == 0 then
         _removeValueArray(self.layers, al)
       end
     end
@@ -730,38 +653,18 @@ function entitySystem:revertFromStatic(e)
     for i=1, #self.layers do
       local v = self.layers[i]
       if v.layer == e._layer then
-        if not self.inDrawLoop then
-          local nextHole = next(v.holes)
-          if nextHole then
-            v.data[nextHole] = e
-            v.holes[nextHole] = nil
-          else
-            v.data[#v.data + 1] = e
-          end
-        else
-          v.data[#v.data + 1] = e
-        end
+        v.data[#v.data + 1] = e
         done = true
         break
       end
     end
     
     if not done then
-      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}, holes = {}}
+      self.layers[#self.layers + 1] = {layer = e._layer, data = {e}}
       self._doSort = true
     end
     
-    if not self.inLoop then
-      local nextHole = next(self._updateHoles)
-      if nextHole then
-        self._updates[nextHole] = e
-        self._updateHoles[nextHole] = nil
-      else
-        self._updates[#self._updates + 1] = e
-      end
-    else
-      self._updates[#self._updates + 1] = e
-    end
+    self._updates[#self._updates + 1] = e
     
     if e.collisionShape and e._staticX == e.position.x and e._staticY == e.position.y and
       e._staticW == e.collisionShape.w and e._staticH == e.collisionShape.h then
@@ -890,12 +793,6 @@ function entitySystem:setImageCollision(e, data)
   e.collisionShape.h = data:getHeight()
   e.collisionShape.data = data
   
-  if not self._imgCache[e.collisionShape.data] then
-    self._imgCache[e.collisionShape.data] = love.graphics.newImage(e.collisionShape.data)
-  end
-  
-  e.collisionShape.image = self._imgCache[e.collisionShape.data]
-  
   e.collisionShape.r = nil
   
   if not e.invisibleToHash then self:updateEntityHash(e) end
@@ -916,6 +813,38 @@ function entitySystem:setCircleCollision(e, r)
   e.collisionShape.data = nil
   
   if not e.invisibleToHash then self:updateEntityHash(e) end
+end
+
+function entitySystem:pointInEntity(e, x, y)
+  self:_conform(e)
+  
+  self:setRectangleCollision(self._tempEnt, 1, 1)
+  
+  return e.collisionShape and self:collision(self._tempEnt, e, x, y)
+end
+
+function entitySystem:rectangleInEntity(e, x, y, w, h)
+  self:_conform(e)
+  
+  self:setRectangleCollision(self._tempEnt, w, h)
+  
+  return e.collisionShape and self:collision(self._tempEnt, e, x, y)
+end
+
+function entitySystem:imageInEntity(e, x, y, data)
+  self:_conform(e)
+  
+  self:setImageCollision(self._tempEnt, data)
+  
+  return e.collisionShape and self:collision(self._tempEnt, e, x, y)
+end
+
+function entitySystem:circleInEntity(e, x, y, r)
+  self:_conform(e)
+  
+  self:setCircleCollision(self._tempEnt, r)
+  
+  return e.collisionShape and self:collision(self._tempEnt, e, x, y)
 end
 
 function entitySystem:collision(e, other, x, y)
@@ -960,7 +889,7 @@ function entitySystem:drawCollision(e)
     love.graphics.rectangle("line", _floor(e.position.x), _floor(e.position.y),
       e.collisionShape.w, e.collisionShape.h)
   elseif e.collisionShape.type == entitySystem.COL_IMAGE then
-    e.collisionShape.image:draw(_floor(e.position.x), _floor(e.position.y))
+    -- No drawing support
   elseif e.collisionShape.type == entitySystem.COL_CIRCLE then
     love.graphics.circle("line", _floor(e.position.x), _floor(e.position.y), e.collisionShape.r)
   end
