@@ -10,7 +10,7 @@ First, create the system:
 
 ```lua
 local entitylove = require("entitylove")
-local system = entitylove(96) -- Hash size is an optional arg, and defaults to `96`.
+local system = entitylove(96, entitylove.SLOPE_MODE_PLATFORMER) -- Hash size and slope mode are optional args.
 ```
 
 Then, create the entity using your class implementation of choice (or an empty table will work, too! See example in `main.lua`):
@@ -68,11 +68,13 @@ end
 
 ---
 
-**`entitySystem(hashSize)` / (`__call` metatable function)**
+**`entitySystem(hashSize, defaultSlopeMode)` / (`__call` metatable function)**
 
 **`hashSize`: number = 96**
 
-Creates an instance of `entitySystem` with `hashSize` as the spatial hash size.
+**`defaultSlopeMode`: enum = entitySystem.SLOPE_MODE_TOPDOWN**
+
+Creates an instance of `entitySystem` with `hashSize` as the spatial hash size, and sets a default for each entities' `.slopeMode`.
 
 ---
 
@@ -81,6 +83,10 @@ Creates an instance of `entitySystem` with `hashSize` as the spatial hash size.
 **`.COL_IMAGE`: enum = 2**: Image collider type.
 
 **`.COL_CIRCLE`: enum = 3**: Circle collider type.
+
+**`.SLOPE_MODE_PLATFORMER`: enum = 1**: `:move()` only accounts for up / down sloping.
+
+**`.SLOPE_MODE_TOPDOWN`: enum = 2**: `:move()` only accounts for sloping based on velocity.
 
 **`.hashSize`: readonly number**: Hash cell size.
 
@@ -202,13 +208,11 @@ Sets position of `e` and updates its spatial hash.
 
 ---
 
-**`:move(e, x, y, solid, resolverX, resolverY)`**
+**`:move(e, solids)`**
 
-**`e`: table - entity, `x`: number, `y`: number, `solids`: table, `resolverX`: function(against: table), `resolverY`: function(against: table)**
+**`e`: table - entity, `solids`: table**
 
-**returns boolean, boolean**
-
-Moves position of `e` and updates its spatial hash. `e` will not move into any entity in `solids`, and may use a custom collision resolver `resolveX` and `resolveY`, where `against` is a table of valid solid entities. Returns if solid shift happened along X or Y axis.
+Moves position of `e` by `e.velocity` and updates its spatial hash. `e` will not move into any entity in `solids`, and has sloping behaviour based on `e.slopeMode`.
 
 
 ---
@@ -323,6 +327,11 @@ Reverts "static" state from `e`, making it a normal entity. This function calls 
 
 - **`.x`: number**: X axis.
 - **`.y`: number**: Y axis.
+
+**`.velocity`: table**: velocity used by `entitySystem:move(e, solids)`.
+
+- **`.x`: number**: X velocity.
+- **`.y`: number**: Y velocity.
 
 **`.collisionShape`: readonly table**: collision used by EntityLove. Note: manually changing this variable will not update its spatial hash. To set the collider and update the hash, use one of `entitySystem`'s collision setters.
 

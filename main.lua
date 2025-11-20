@@ -5,7 +5,7 @@ local entitylove = require("entitylove")
 local system = entitylove()
 
 local function drawParticle(self)
-  if self.collisionShape.type == system.COL_CIRCLE then
+  if self.collisionShape.type == entitylove.COL_CIRCLE then
     love.graphics.circle("fill", self.position.x, self.position.y, self.collisionShape.r)
   else
     if system:pointInEntity(self, love.mouse.getX(), love.mouse.getY()) then
@@ -32,6 +32,7 @@ local function createParticle(x, y)
   end
   
   particle.draw = drawParticle
+  particle.solidType = entitylove.SOLID_TYPE_SOLID
   
   return particle
 end
@@ -53,26 +54,25 @@ local function updatePlayer(self, dt)
   end
   
   if moveDirX ~= 0 or moveDirY ~= 0 then
-    local moveX, moveY = moveDirX * 150 * dt, moveDirY * 150 * dt
-    system:move(self, moveX, moveY, system:getSurroundingEntities(self,
-      math.abs(moveX), math.abs(moveX), math.abs(moveY), math.abs(moveY)))
+    self.velocity.x, self.velocity.y = moveDirX * 120 * dt, moveDirY * 120 * dt
+    system:move(self)
   end
 end
 
 local function drawPlayer(self)
-  love.graphics.setColor(0, 1, 0, 1)
-  love.graphics.rectangle("fill", self.position.x, self.position.y,
-    self.collisionShape.w, self.collisionShape.h)
+  system:drawCollision(self)
 end
 
 function createPlayer(x, y)
   local player = {}
   
   system:pos(player, x, y)
-  system:setRectangleCollision(player, 16, 16)
+  system:setRectangleCollision(player, 32, 32)
   
   player.update = updatePlayer
   player.draw = drawPlayer
+  player.maxSlopeX = 4
+  player.maxSlopeY = 6
   
   return player
 end

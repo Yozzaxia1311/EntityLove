@@ -6,7 +6,16 @@ entitySystem.COL_RECT = 1
 entitySystem.COL_IMAGE = 2
 entitySystem.COL_CIRCLE = 3
 
+entitySystem.SOLID_TYPE_NONE = 1
+entitySystem.SOLID_TYPE_SOLID = 2
+entitySystem.SOLID_TYPE_ONEWAY = 3
+
+entitySystem.SLOPE_MODE_PLATFORMER = 1
+entitySystem.SLOPE_MODE_TOPDOWN = 2
+
 -- Important util functions.
+
+local _remove = table.remove
 
 local _floor = math.floor
 local _ceil = math.ceil
@@ -17,7 +26,10 @@ local _sin = math.sin
 local _cos = math.cos
 local _atan2 = math.atan2
 local _abs = math.abs
-local _remove = table.remove
+
+local function _sign(x)
+  return x > 0 and 1 or (x < 0 and -1 or 0)
+end
 
 local function _round(v)
   return _floor(0.5 + v)
@@ -232,7 +244,7 @@ local _entityCollision = {
 
 -- Entity processing system.
 
-function entitySystem_new(self, hs)
+function entitySystem_new(self, hs, defaultSlopeMode)
   local new = {}
   
   new.layers = {}
@@ -246,10 +258,11 @@ function entitySystem_new(self, hs)
   new._doSort = false
   new.inLoop = false
   new.inDrawLoop = false
-  new.drawCollision = false
+  new.debugDrawCollision = false
   new.hashSize = hs or 96
   new._entityRemovedInLoop = false
   new._tempEnt = {invisibleToHash = true}
+  new._defaultSlopeMode = defaultSlopeMode or entitySystem.SLOPE_MODE_TOPDOWN
   
   return setmetatable(new, {__index = entitySystem})
 end
@@ -342,7 +355,7 @@ function entitySystem:draw()
     end
   end
   
-  if self.drawCollision then
+  if self.debugDrawCollision then
     love.graphics.setColor(1, 1, 1, 1)
     for i = 1, #self.layers do
       for j = 1, self.layers[i].data do
@@ -885,6 +898,9 @@ end
 function entitySystem:drawCollision(e)
   self:_conform(e)
   
+  local r, g, b, a = love.graphics.getColor()
+  love.graphics.setColor(1, 1, 1, 1)
+  
   if e.collisionShape.type == entitySystem.COL_RECT then
     love.graphics.rectangle("line", _floor(e.position.x), _floor(e.position.y),
       e.collisionShape.w, e.collisionShape.h)
@@ -893,6 +909,8 @@ function entitySystem:drawCollision(e)
   elseif e.collisionShape.type == entitySystem.COL_CIRCLE then
     love.graphics.circle("line", _floor(e.position.x), _floor(e.position.y), e.collisionShape.r)
   end
+  
+  love.graphics.setColor(r, g, b, a)
 end
 
 function entitySystem:updateEntityHash(e, forceUpdate)
@@ -1052,72 +1070,38 @@ function entitySystem:pos(e, x, y)
   end
 end
 
-function entitySystem:move(e, x, y, solids, resolverX, resolverY)
+function entitySystem:move(e)
   self:_conform(e)
   
-  local vx, vy = (x or 0), (y or 0)
+  local vx, vy = e.velocity.x, e.velocity.y
   local colX, colY = false, false
+  local prioritizeY = (e.slopeMode == self.SLOPE_MODE_TOPDOWN) and (_abs(e.velocity.y) > _abs(e.velocity.x))
   
   if vx ~= 0 or vy ~= 0 then
-    if solids and e.collisionShape then
+    if e.collisionShape then
+      local all = self:getSurroundingEntities(e, _abs(_min(e.velocity.x, 0)),
+        _max(e.velocity.x, 0),
+      _abs(_min(e.velocity.y, 0)), _max(e.velocity.y, 0))
       local against = {}
       
-      for k, v in ipairs(solids) do
-        if v ~= e and v.collisionShape then
-          against[#against + 1] = v
+      for i=1, #all do
+        local v = all[i]
+        if v ~= e and v.collisionShape and
+          (not v.exclusivelySolidFor or _icontains(v.exclusivelySolidFor, e)) and
+          (not v.excludeSolidFor or not _icontains(v.excludeSolidFor, e)) then
+          if v.solidType == self.SOLID_TYPE_SOLID then
+            if not self:collision(v, e) and not _icontains(against, v) then
+              against[#against+1] = v
+            end
+          end
         end
       end
       
       if #against > 0 then
-        if vx ~= 0 and vy ~= 0 then
-          local vxSign, vySign = vx > 0 and 1 or -1, vy > 0 and 1 or -1
-          local toX, toY = e.position.x + vx, e.position.y + vy
-          local angle = _atan2(vy, vx)
-          local dist = (e.collisionShape.w > e.collisionShape.h) and
-            e.collisionShape.w or e.collisionShape.h
-          local moveX, moveY = _abs(_sin(angle) * dist), _abs(_cos(angle) * dist)
-          
-          repeat
-            if not colX then
-              e.position.x = _approach(e.position.x, toX, moveX)
-              
-              if self:collisionNumber(e, against) > 0 then
-                e.position.x = _round(e.position.x + vxSign)
-                
-                if resolverX then
-                  resolverX(against)
-                else
-                  while self:collisionNumber(e, against) > 0 do
-                    e.position.x = e.position.x - vxSign * 0.5
-                  end
-                end
-                
-                colX = true
-              end
-            end
-            
-            if not colY then
-              e.position.y = _approach(e.position.y, toY, moveY)
-              
-              if self:collisionNumber(e, against) > 0 then
-                e.position.y = _round(e.position.y + vySign)
-                
-                if resolverY then
-                  resolverY(against)
-                else
-                  while self:collisionNumber(e, against) > 0 do
-                    e.position.y = e.position.y - vySign * 0.5
-                  end
-                end
-                
-                colY = true
-              end
-            end
-          until (colX and colY) or (colX and e.position.y == toY) or
-            (colY and e.position.x == toX) or (e.position.x == toX and e.position.y == toY)
-        elseif vx ~= 0 then
+        if vx ~= 0 then
           local vxSign = vx > 0 and 1 or -1
           local toX = e.position.x + vx
+          local prevX = e.position.x
           
           repeat
             e.position.x = _approach(e.position.x, toX, e.collisionShape.w)
@@ -1125,20 +1109,57 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
             if self:collisionNumber(e, against) > 0 then
               e.position.x = _round(e.position.x + vxSign)
               
-              if resolverX then
-                resolverX(against)
-              else
-                while self:collisionNumber(e, against) > 0 do
-                  e.position.x = e.position.x - vxSign * 0.5
-                end
+              while self:collisionNumber(e, against) > 0 do
+                e.position.x = e.position.x - vxSign * 0.5
               end
               
               colX = true
+              e.collisionShock.x = e.position.x - prevX
+              e.prevVel.x = e.velocity.x
+              e.velocity.x = 0
+              
+              if not prioritizeY and e.prevVel.x ~= 0 and e.maxSlope > 0 then
+                local xsl = e.prevVel.x - e.collisionShock.x
+                local yStep = 1
+                local xStep = 0
+                local dst = _abs(xsl)
+                local yTolerance = _ceil(dst) * e.maxSlope
+                
+                while xStep ~= dst do
+                  if self:collisionNumber(e, against, xsl - xStep, -yStep) == 0 then
+                    e.position.x = e.position.x + xsl - xStep
+                    e.position.y = e.position.y - yStep
+                    if xStep == 0 then
+                      e.velocity.x = e.prevVel.x
+                      e.prevVel.x = 0
+                    end
+                    break
+                  elseif self:collisionNumber(e, against, xsl - xStep, yStep) == 0 then
+                    e.position.x = e.position.x + xsl - xStep
+                    e.position.y = e.position.y + yStep
+                    if xStep == 0 then
+                      e.velocity.x = e.prevVel.x
+                      e.prevVel.x = 0
+                    end
+                    break
+                  end
+                  if yStep > yTolerance then
+                    yStep = 1
+                    xStep = _min(xStep + 1, dst)
+                    yTolerance = _ceil(dst - xStep) * e.maxSlope
+                  else
+                    yStep = yStep + 1
+                  end
+                end
+              end
             end
           until colX or e.position.x == toX
-        else
+        end
+        
+        if vy ~= 0 then
           local vySign = vy > 0 and 1 or -1
           local toY = e.position.y + vy
+          local prevY = e.position.y
           
           repeat
             e.position.y = _approach(e.position.y, toY, e.collisionShape.h)
@@ -1146,15 +1167,49 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
             if self:collisionNumber(e, against) > 0 then
               e.position.y = _round(e.position.y + vySign)
               
-              if resolverY then
-                resolverY(against)
-              else
-                while self:collisionNumber(e, against) > 0 do
-                  e.position.y = e.position.y - vySign * 0.5
-                end
+              while self:collisionNumber(e, against) > 0 do
+                e.position.y = e.position.y - vySign * 0.5
               end
               
               colY = true
+              e.collisionShock.y = e.position.y - prevY
+              e.prevVel.y = e.velocity.y
+              e.velocity.y = 0
+              
+              if prioritizeY and e.prevVel.y ~= 0 and e.maxSlope > 0 then
+                local ysl = e.prevVel.y - e.collisionShock.y
+                local xStep = 1
+                local yStep = 0
+                local dst = _abs(ysl)
+                local xTolerance = _ceil(dst) * e.maxSlope
+                
+                while yStep ~= dst do
+                  if self:collisionNumber(e, against, -xStep, ysl - yStep) == 0 then
+                    e.position.y = e.position.y + ysl - yStep
+                    e.position.x = e.position.x - xStep
+                    if yStep == 0 then
+                      e.velocity.y = e.prevVel.y
+                      e.prevVel.y = 0
+                    end
+                    break
+                  elseif self:collisionNumber(e, against, xStep, ysl - yStep) == 0 then
+                    e.position.y = e.position.y + ysl - yStep
+                    e.position.x = e.position.x + xStep
+                    if yStep == 0 then
+                      e.velocity.y = e.prevVel.y
+                      e.prevVel.y = 0
+                    end
+                    break
+                  end
+                  if xStep > xTolerance then
+                    xStep = 1
+                    yStep = _min(yStep + 1, dst)
+                    xTolerance = _ceil(dst - yStep) * e.maxSlope
+                  else
+                    xStep = xStep + 1
+                  end
+                end
+              end
             end
           until colY or e.position.y == toY
         end
@@ -1167,8 +1222,6 @@ function entitySystem:move(e, x, y, solids, resolverX, resolverY)
     
     self:updateEntityHash(e)
   end
-  
-  return colX, colY
 end
 
 function entitySystem:_conform(t)
@@ -1185,6 +1238,25 @@ function entitySystem:_conform(t)
     end
     t.position.x = t.position.x or 0
     t.position.y = t.position.y or 0
+    if t.velocity == nil then
+      t.velocity = {}
+    end
+    t.velocity.x = t.velocity.x or 0
+    t.velocity.y = t.velocity.y or 0
+    if t.collisionShock == nil then
+      t.collisionShock = {}
+    end
+    t.collisionShock.x = t.collisionShock.x or 0
+    t.collisionShock.y = t.collisionShock.y or 0
+    if t.prevVel == nil then
+      t.prevVel = {}
+    end
+    t.prevVel.x = t.prevVel.x or 0
+    t.prevVel.y = t.prevVel.y or 0
+    t.maxSlope = 3
+    t.slopeMode = self._defaultSlopeMode
+    t.blockCollision = true
+    t.solidType = self.SOLID_TYPE_NONE
     if t.canUpdate == nil then
       t.canUpdate = true
     end
